@@ -1,0 +1,6 @@
+{
+  "name": "Retail Sync: Inventory, Sales & Staff Manager",
+  "description": "An all-in-one platform for retail shop owners to track real-time inventory, manage custom commission-based sales with PDF invoice downloads, handle staff attendance/wages, and leverage Gemini AI for stock recommendations.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

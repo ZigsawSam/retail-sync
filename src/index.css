@@ -1,0 +1,33 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700;800&family=Pixelify+Sans:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Pixelify Sans", "Geist Mono", ui-monospace, monospace;
+  --font-serif: "Pixelify Sans", "Geist Mono", ui-monospace, monospace;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+body {
+  font-family: "Pixelify Sans", "Geist Mono", monospace;
+  background-color: #F5F2EB;
+  color: #111111;
+}
+
+.bauhaus-shadow {
+  box-shadow: 4px 4px 0px 0px #000000;
+}
+.bauhaus-shadow-sm {
+  box-shadow: 2px 2px 0px 0px #000000;
+}
+.bauhaus-shadow-lg {
+  box-shadow: 6px 6px 0px 0px #000000;
+}
+.bauhaus-shadow-blue {
+  box-shadow: 4px 4px 0px 0px #0055A5;
+}
+.bauhaus-shadow-red {
+  box-shadow: 4px 4px 0px 0px #D63031;
+}
+.bauhaus-shadow-yellow {
+  box-shadow: 4px 4px 0px 0px #FFC300;
+}
