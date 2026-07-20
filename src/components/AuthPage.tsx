@@ -195,26 +195,29 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
           }
         }
 
-        // C. Try to query Supabase using the secure verify_staff_login RPC first (bypassing RLS securely)
-        if (!foundStaffMatch && supabase) {
-          try {
-            const { data: rpcRes, error: rpcErr } = await supabase.rpc("verify_staff_login", {
-              p_email: email,
-              p_password: password
-            });
+        // C. Try to query Supabase using the secure verify_staff_login RPC
+if (!foundStaffMatch && supabase) {
+  try {
+    const { data: rpcRes, error: rpcErr } = await supabase.rpc("verify_staff_login", {
+      p_email: email,
+      p_password: password
+    });
 
-            if (!rpcErr && rpcRes && rpcRes.success) {
-              foundStaffMatch = true;
-              matchedOwnerUid = rpcRes.ownerUid;
-              matchedRole = rpcRes.role;
-              matchedDisplayName = rpcRes.displayName;
-            } else if (rpcErr) {
-              console.warn("verify_staff_login RPC query returned error, falling back:", rpcErr);
-            }
-          } catch (e) {
-            console.warn("verify_staff_login RPC failed, trying settings query fallback:", e);
-          }
-        }
+    // Check if rpcRes is not null and the success property is true
+    if (!rpcErr && rpcRes && rpcRes.success === true) {
+      foundStaffMatch = true;
+      matchedOwnerUid = rpcRes.ownerUid;
+      matchedRole = rpcRes.role;
+      matchedDisplayName = rpcRes.displayName;
+      
+      console.log("Staff match found via RPC:", matchedDisplayName);
+    } else if (rpcErr) {
+      console.warn("verify_staff_login RPC query returned error, falling back:", rpcErr);
+    }
+  } catch (e) {
+    console.warn("verify_staff_login RPC failed, trying settings query fallback:", e);
+  }
+}
 
         // D. Fallback: Try to query settings directly if RPC isn't deployed or returned no match (in case they are on a new browser/device and RLS is disabled)
         if (!foundStaffMatch && supabase) {
