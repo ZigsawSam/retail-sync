@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
-import { Product, Customer, Staff, Sale, Expense, StoreSettings, Cheque, ElectronicTx, ERPRole } from "../types";
+import { Product, Customer, Staff, Sale, Expense, StoreSettings, Cheque, ElectronicTx, ERPRole, StaffLogin } from "../types";
 import { isSupabaseConfigured, getSupabaseClient, transferMockDataToSupabase, parseSupabaseError, UserFriendlyError } from "../lib/supabase";
 import { getAppMode } from "@/lib/app-mode";
 
@@ -90,61 +90,96 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
 
   useEffect(() => {
-    // If operator is locked to cashier or inventory, force currentRole to match
     if (operatorRole !== "admin" && currentRole !== operatorRole) {
       setCurrentRole(operatorRole);
     }
   }, [operatorRole, currentRole]);
 
   const handleRoleChange = (role: ERPRole) => {
-    if (operatorRole !== "admin") return; // locked to current staff operator
+    if (operatorRole !== "admin") return;
     setCurrentRole(role);
     if (typeof window !== "undefined") {
       localStorage.setItem("retail_sync_erp_role", role);
     }
   };
 
-  const handleSwitchOperator = async (role: ERPRole, password?: string, email?: string): Promise<{ success: boolean; message: string }> => {
-    if (operatorRole !== "admin" && role !== "admin") {
-      return { success: false, message: "Only the Admin/Owner can authorize switching operator roles!" };
+  // FIXED: handleSwitchOperator now queries staff_logins table instead of settings.staffAccounts
+  const handleSwitchOperator = async (
+    role: ERPRole,
+    password?: string,
+    email?: string
+  ): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser) {
+      return { success: false, message: "No owner session found." };
     }
 
+    // Admin login still uses settings.ownerPassword
     if (role === "admin") {
       const adminPass = settings.ownerPassword || "admin";
       if (password !== adminPass) {
         return { success: false, message: "Invalid Owner / Admin access password!" };
       }
-    } else if (role === "cashier") {
-      const cashierAcc: any = settings.staffAccounts?.cashier || { username: "Cashier Desk", email: "cashier@retailsync.com", password: "cashier123", isActive: true };
-      if (!cashierAcc || !cashierAcc.isActive) {
-        return { success: false, message: "Cashier role is not currently onboarded or is inactive!" };
-      }
-      if (email && cashierAcc.email && email.trim().toLowerCase() !== cashierAcc.email.trim().toLowerCase()) {
-        return { success: false, message: "Invalid Cashier login email / username!" };
-      }
-      if (password !== cashierAcc.password) {
-        return { success: false, message: "Invalid Cashier password!" };
-      }
-    } else if (role === "inventory_manager") {
-      const invAcc: any = settings.staffAccounts?.inventory || { username: "Inventory Manager", email: "stock@retailsync.com", password: "stock123", isActive: true };
-      if (!invAcc || !invAcc.isActive) {
-        return { success: false, message: "Stockroom Manager role is not currently onboarded or is inactive!" };
-      }
-      if (email && invAcc.email && email.trim().toLowerCase() !== invAcc.email.trim().toLowerCase()) {
-        return { success: false, message: "Invalid Stockroom Manager login email / username!" };
-      }
-      if (password !== invAcc.password) {
-        return { success: false, message: "Invalid Stockroom Manager password!" };
-      }
+      setOperatorRole("admin");
+      setCurrentRole("admin");
+      localStorage.setItem("retail_sync_operator_role", "admin");
+      localStorage.setItem("retail_sync_erp_role", "admin");
+      return { success: true, message: "Switched to ADMIN mode." };
     }
 
+    // Cashier / Stockist: query staff_logins table, NOT settings
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return { success: false, message: "Supabase not connected." };
+    }
+
+    const { data: staffRecs, error } = await supabase
+      .from("staff_logins")
+      .select("*")
+      .eq("user_id", currentUser.uid)
+      .eq("role", role)
+      .eq("is_active", true);
+
+    if (error) {
+      return { success: false, message: "Database error fetching staff record." };
+    }
+
+    if (!staffRecs || staffRecs.length === 0) {
+      return {
+        success: false,
+        message: `No active ${role === "inventory_manager" ? "Stock Manager" : "Cashier"} found. Onboard them first in Settings.`,
+      };
+    }
+
+    const staffRec = staffRecs[0] as StaffLogin;
+
+    if (email && staffRec.email && email.trim().toLowerCase() !== staffRec.email.trim().toLowerCase()) {
+      return { success: false, message: "Invalid login email / username!" };
+    }
+
+    if (password !== staffRec.password) {
+      return { success: false, message: "Invalid password!" };
+    }
+
+    // SUCCESS: store staff session with DB reference
     setOperatorRole(role);
     setCurrentRole(role);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("retail_sync_operator_role", role);
-      localStorage.setItem("retail_sync_erp_role", role);
-    }
-    return { success: true, message: `Successfully authenticated and switched session to ${role === "inventory_manager" ? "Stock Manager" : role.toUpperCase()}!` };
+
+    const staffSession = {
+      ownerUid: currentUser.uid,
+      role: role,
+      email: staffRec.email,
+      staffLoginId: staffRec.id,
+      staffName: staffRec.name,
+    };
+
+    sessionStorage.setItem("retail_sync_staff_session", JSON.stringify(staffSession));
+    localStorage.setItem("retail_sync_operator_role", role);
+    localStorage.setItem("retail_sync_erp_role", role);
+
+    return {
+      success: true,
+      message: `Authenticated as ${staffRec.name} (${role === "inventory_manager" ? "Stock Manager" : "Cashier"}).`,
+    };
   };
 
   // --- PERSISTENT DATABASE STATES ---
@@ -231,7 +266,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             }
             throw new Error(res.message);
           }
-          // Fetch the newly upserted settings
           const { data: newSettingsData, error: newSettingsError } = await supabase
             .from("settings")
             .select("*")
@@ -264,16 +298,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             if (upsertErr) throw upsertErr;
             setSettings(defaultSettings as StoreSettings);
           } catch (fallbackErr: any) {
-            console.error("Fallback settings upsert failed (likely due to RLS policy violation):", fallbackErr);
+            console.error("Fallback settings upsert failed:", fallbackErr);
             const parsedFallback = parseSupabaseError(fallbackErr);
             setSupabaseError(parsedFallback);
-            // Load in-memory so the app is still responsive and can show RLS troubleshooting advice
             setSettings(defaultSettings as StoreSettings);
           }
         }
       }
 
-      // Helper to execute query & handle RLS error gracefully
       async function runQuery<T>(queryPromise: PromiseLike<{ data: T | null, error: any }>, callback: (data: T) => void, tableName: string) {
         const { data, error } = await queryPromise;
         if (error) {
@@ -287,28 +319,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-      // 2. Products
       await runQuery(supabase.from("products").select("*").eq("userId", uid), setProducts as any, "products");
-
-      // 3. Customers
       await runQuery(supabase.from("customers").select("*").eq("userId", uid), setCustomers as any, "customers");
-
-      // 4. Staff
       await runQuery(supabase.from("staff").select("*").eq("userId", uid), setStaff as any, "staff");
-
-      // 5. Sales
       await runQuery(supabase.from("sales").select("*").eq("userId", uid), setSales as any, "sales");
-
-      // 6. Expenses
       await runQuery(supabase.from("expenses").select("*").eq("userId", uid), setExpenses as any, "expenses");
-
-      // 7. ElectronicTxs
       await runQuery(supabase.from("electronicTxs").select("*").eq("userId", uid), setElectronicTxs as any, "electronicTxs");
-
-      // 8. Cheques
       await runQuery(supabase.from("cheques").select("*").eq("userId", uid), setCheques as any, "cheques");
 
-      // 9. ActualDrawerCash
       const { data: drawerData, error: drawerErr } = await supabase
         .from("actualDrawerCash")
         .select("*")
@@ -336,92 +354,81 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-// --- AUTH MONITOR ---
-useEffect(() => {
-  const supabase = getSupabaseClient();
+  // --- AUTH MONITOR ---
+  useEffect(() => {
+    const supabase = getSupabaseClient();
 
-  // Staff (cashier / stockist) session — set by AuthPage.tsx after a
-  // successful match against settings.staffAccounts. This must be checked
-  // first: staff never get a real Supabase Auth session, so without this
-  // check currentUser stays null forever and they get bounced back to login.
-  const staffSessionStr =
-    typeof window !== "undefined"
-      ? sessionStorage.getItem("retail_sync_staff_session")
-      : null;
+    const staffSessionStr =
+      typeof window !== "undefined"
+        ? sessionStorage.getItem("retail_sync_staff_session")
+        : null;
 
-  if (staffSessionStr) {
-    try {
-      const staffSession = JSON.parse(staffSessionStr);
-      if (staffSession?.ownerUid && staffSession?.role) {
-        setCurrentUser({ uid: staffSession.ownerUid, email: staffSession.email ?? null });
-        setOperatorRole(staffSession.role);
-        setCurrentRole(staffSession.role);
-        setAuthLoading(false);
-        return;
+    if (staffSessionStr) {
+      try {
+        const staffSession = JSON.parse(staffSessionStr);
+        if (staffSession?.ownerUid && staffSession?.role) {
+          setCurrentUser({ uid: staffSession.ownerUid, email: staffSession.email ?? null });
+          setOperatorRole(staffSession.role);
+          setCurrentRole(staffSession.role);
+          setAuthLoading(false);
+          return;
+        }
+      } catch (e) {
+        console.error("Failed to parse staff session, clearing it:", e);
+        sessionStorage.removeItem("retail_sync_staff_session");
       }
-    } catch (e) {
-      console.error("Failed to parse staff session, clearing it:", e);
-      sessionStorage.removeItem("retail_sync_staff_session");
-    }
-  }
-
-  // Offline Sandbox ONLY
-  const savedLocalUser =
-    typeof window !== "undefined"
-      ? localStorage.getItem("retail_sync_local_user")
-      : null;
-
-  if (
-    savedLocalUser &&
-    JSON.parse(savedLocalUser).uid === "local-demo"
-  ) {
-    setCurrentUser(JSON.parse(savedLocalUser));
-    setAuthLoading(false);
-    return;
-  }
-
-  if (!supabase) {
-    setAuthLoading(false);
-    return;
-  }
-
-  const mode = getAppMode();
-
-if (mode === "offline" && savedLocalUser) {
-    setCurrentUser(JSON.parse(savedLocalUser));
-    setAuthLoading(false);
-    return;
-}
-  supabase.auth.getSession().then(({ data: { session } }) => {
-    if (session?.user) {
-      setCurrentUser({
-        uid: session.user.id,
-        email: session.user.email ?? null,
-      });
-    } else {
-      setCurrentUser(null);
     }
 
-    setAuthLoading(false);
-  });
+    const savedLocalUser =
+      typeof window !== "undefined"
+        ? localStorage.getItem("retail_sync_local_user")
+        : null;
 
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange((event, session) => {
-    if (session?.user) {
-      setCurrentUser({
-        uid: session.user.id,
-        email: session.user.email ?? null,
-      });
-    } else {
-      setCurrentUser(null);
+    if (savedLocalUser && JSON.parse(savedLocalUser).uid === "local-demo") {
+      setCurrentUser(JSON.parse(savedLocalUser));
+      setAuthLoading(false);
+      return;
     }
 
-    setAuthLoading(false);
-  });
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
 
-  return () => subscription.unsubscribe();
-}, []);
+    const mode = getAppMode();
+
+    if (mode === "offline" && savedLocalUser) {
+      setCurrentUser(JSON.parse(savedLocalUser));
+      setAuthLoading(false);
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setCurrentUser({
+          uid: session.user.id,
+          email: session.user.email ?? null,
+        });
+      } else {
+        setCurrentUser(null);
+      }
+      setAuthLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user) {
+        setCurrentUser({
+          uid: session.user.id,
+          email: session.user.email ?? null,
+        });
+      } else {
+        setCurrentUser(null);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // --- REAL-TIME DATA SYNC PIPELINES ---
   useEffect(() => {
@@ -459,7 +466,6 @@ if (mode === "offline" && savedLocalUser) {
       return;
     }
 
-    // Load user's data from Supabase
     fetchSupabaseData(uid);
   }, [currentUser?.uid]);
 
@@ -626,10 +632,10 @@ if (mode === "offline" && savedLocalUser) {
   };
 
   const handleLogAttendance = async (
-    staffId: string, 
-    date: string, 
-    present: boolean, 
-    hoursWorked?: number, 
+    staffId: string,
+    date: string,
+    present: boolean,
+    hoursWorked?: number,
     wageEarned?: number
   ) => {
     if (!currentUser) return;
@@ -663,16 +669,32 @@ if (mode === "offline" && savedLocalUser) {
     }
   };
 
+  // FIXED: handleAddSale now logs which staff processed the sale
   const handleAddSale = async (newSale: Sale) => {
     if (!currentUser) return;
-    
-    // Local updates
-    setSales(prev => [...prev, newSale]);
+
+    // Get current staff info from session
+    const staffSessionStr = sessionStorage.getItem("retail_sync_staff_session");
+    let staffInfo = { id: null as string | null, name: null as string | null };
+
+    if (staffSessionStr) {
+      try {
+        const s = JSON.parse(staffSessionStr);
+        staffInfo = { id: s.staffLoginId || null, name: s.staffName || null };
+      } catch (e) { /* ignore */ }
+    }
+
+    // Attach staff info to the sale
+    const saleWithStaff: Sale = {
+      ...newSale,
+      processedBy: staffInfo.id || undefined,
+      processedByName: staffInfo.name || undefined,
+    };
+
+    setSales(prev => [...prev, saleWithStaff]);
     setProducts(prev => prev.map(p => {
       const item = newSale.items.find(it => it.productId === p.id);
-      if (item) {
-        return { ...p, quantity: Math.max(0, p.quantity - item.quantity) };
-      }
+      if (item) return { ...p, quantity: Math.max(0, p.quantity - item.quantity) };
       return p;
     }));
 
@@ -681,30 +703,11 @@ if (mode === "offline" && savedLocalUser) {
       if (supabase) {
         try {
           const payload = {
-            ...newSale,
-            userId: currentUser.uid
+            ...saleWithStaff,
+            userId: currentUser.uid,
           };
-          let result = await supabase.from("sales").upsert(payload);
-          if (result.error) {
-            console.warn("Initial sales upsert failed (likely missing discountAmount or clearanceStatus column). Retrying without discountAmount:", result.error);
-            const { discountAmount, ...withoutDiscount } = payload;
-            result = await supabase.from("sales").upsert(withoutDiscount);
-            if (result.error) {
-              console.warn("Sales upsert without discountAmount failed. Retrying without clearanceStatus:", result.error);
-              const { clearanceStatus, ...withoutClearance } = payload;
-              result = await supabase.from("sales").upsert(withoutClearance);
-              if (result.error) {
-                console.warn("Sales upsert without clearanceStatus failed. Retrying without both:", result.error);
-                const { clearanceStatus: c, discountAmount: d, ...sanitized } = payload;
-                result = await supabase.from("sales").upsert(sanitized);
-                if (result.error) {
-                  console.error("All sales upsert attempts failed:", result.error);
-                }
-              }
-            }
-          }
+          await supabase.from("sales").upsert(payload);
 
-          // Decrement stock in Supabase
           for (const item of newSale.items) {
             const p = products.find(prod => prod.id === item.productId);
             if (p) {
@@ -734,15 +737,15 @@ if (mode === "offline" && savedLocalUser) {
           };
           let result = await supabase.from("sales").upsert(payload);
           if (result.error) {
-            console.warn("Initial sale update failed (likely missing discountAmount or clearanceStatus column). Retrying without discountAmount:", result.error);
+            console.warn("Initial sale update failed. Retrying without discountAmount:", result.error);
             const { discountAmount, ...withoutDiscount } = payload;
             result = await supabase.from("sales").upsert(withoutDiscount);
             if (result.error) {
-              console.warn("Sale update without discountAmount failed. Retrying without clearanceStatus:", result.error);
+              console.warn("Retrying without clearanceStatus:", result.error);
               const { clearanceStatus, ...withoutClearance } = payload;
               result = await supabase.from("sales").upsert(withoutClearance);
               if (result.error) {
-                console.warn("Sale update without clearanceStatus failed. Retrying without both:", result.error);
+                console.warn("Retrying without both:", result.error);
                 const { clearanceStatus: c, discountAmount: d, ...sanitized } = payload;
                 result = await supabase.from("sales").upsert(sanitized);
                 if (result.error) {
@@ -758,21 +761,40 @@ if (mode === "offline" && savedLocalUser) {
     }
   };
 
+  // FIXED: handleAddExpense now logs which staff logged the expense
   const handleAddExpense = async (newExpense: Expense) => {
     if (!currentUser) return;
-    setExpenses(prev => [...prev, newExpense]);
+
+    // Get current staff info from session
+    const staffSessionStr = sessionStorage.getItem("retail_sync_staff_session");
+    let staffInfo = { id: null as string | null, name: null as string | null };
+
+    if (staffSessionStr) {
+      try {
+        const s = JSON.parse(staffSessionStr);
+        staffInfo = { id: s.staffLoginId || null, name: s.staffName || null };
+      } catch (e) { /* ignore */ }
+    }
+
+    const expenseWithStaff: Expense = {
+      ...newExpense,
+      loggedBy: staffInfo.id || undefined,
+      loggedByName: staffInfo.name || undefined,
+    };
+
+    setExpenses(prev => [...prev, expenseWithStaff]);
 
     if (currentUser.uid !== "local-demo") {
       const supabase = getSupabaseClient();
       if (supabase) {
         try {
           const payload = {
-            ...newExpense,
-            userId: currentUser.uid
+            ...expenseWithStaff,
+            userId: currentUser.uid,
           };
           const { error } = await supabase.from("expenses").upsert(payload);
           if (error) {
-            console.warn("Initial expense upsert failed (likely missing paymentMethod column). Retrying sanitized payload:", error);
+            console.warn("Initial expense upsert failed:", error);
             const { paymentMethod, ...sanitized } = payload;
             const { error: retryError } = await supabase.from("expenses").upsert(sanitized);
             if (retryError) {
@@ -827,7 +849,7 @@ if (mode === "offline" && savedLocalUser) {
             delete (sanitizedPayload as any).staffAccounts;
             delete (sanitizedPayload as any).ownerPassword;
             delete (sanitizedPayload as any).quickAddProductIds;
-            
+
             const { error: retryError } = await supabase.from("settings").upsert(sanitizedPayload);
             if (retryError) {
               console.error("Sanitized retry failed:", retryError);
@@ -937,40 +959,36 @@ if (mode === "offline" && savedLocalUser) {
 
   const handleLogout = async () => {
     try {
-        const supabase = getSupabaseClient();
+      const supabase = getSupabaseClient();
 
-        // 1. Destroy Supabase authentication session
-        if (supabase) {
-            await supabase.auth.signOut();
-        }
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
 
-        // 2. Clear temporary local authentication
-        if (typeof window !== "undefined") {
-            localStorage.removeItem("retail_sync_local_user");
-            localStorage.removeItem("retail_sync_operator_role");
-            localStorage.removeItem("retail_sync_erp_role");
-            sessionStorage.removeItem("retail_sync_staff_session");
-        }
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("retail_sync_local_user");
+        localStorage.removeItem("retail_sync_operator_role");
+        localStorage.removeItem("retail_sync_erp_role");
+        sessionStorage.removeItem("retail_sync_staff_session");
+      }
 
-        // 3. Reset React state
-        setCurrentUser(null);
-        setOperatorRole("admin");
-        setCurrentRole("admin");
+      setCurrentUser(null);
+      setOperatorRole("admin");
+      setCurrentRole("admin");
 
-        // Optional
-        setProducts([]);
-        setCustomers([]);
-        setStaff([]);
-        setSales([]);
-        setExpenses([]);
-        setElectronicTxs([]);
-        setCheques([]);
-        setActualDrawerCash(null);
+      setProducts([]);
+      setCustomers([]);
+      setStaff([]);
+      setSales([]);
+      setExpenses([]);
+      setElectronicTxs([]);
+      setCheques([]);
+      setActualDrawerCash(null);
 
     } catch (err) {
-        console.error("Logout failed:", err);
+      console.error("Logout failed:", err);
     }
-};
+  };
 
   const handleResetDatabase = async (options?: { cleanSlate?: boolean; shopName?: string; startingBalance?: number; currency?: string; taxRate?: number }) => {
     if (!currentUser) return;
@@ -1064,26 +1082,26 @@ if (mode === "offline" && savedLocalUser) {
     setActualDrawerCash(null);
 
     setSettings({
-        shopName: "Loading Outlet...",
-        taxRate: 5,
-        currency: "Rs.",
-        startingBalance: 12500,
-        theme: "bauhaus",
-        ownerPassword: "admin",
-        staffAccounts: {
-            cashier: {
-                username: "Cashier Desk",
-                password: "cashier123",
-                isActive: true,
-            },
-            inventory: {
-                username: "Inventory Manager",
-                password: "stock123",
-                isActive: true,
-            },
+      shopName: "Loading Outlet...",
+      taxRate: 5,
+      currency: "Rs.",
+      startingBalance: 12500,
+      theme: "bauhaus",
+      ownerPassword: "admin",
+      staffAccounts: {
+        cashier: {
+          username: "Cashier Desk",
+          password: "cashier123",
+          isActive: true,
         },
+        inventory: {
+          username: "Inventory Manager",
+          password: "stock123",
+          isActive: true,
+        },
+      },
     });
-};
+  };
 
   const currency = settings.currency;
 
