@@ -3,6 +3,7 @@
 import React from "react";
 import dynamic from "next/dynamic";
 import { useApp } from "../../context/AppContext";
+
 const SettingsPage = dynamic(() => import("../../components/SettingsPage"), { ssr: false });
 
 export default function SettingsPageRoute() {
@@ -14,7 +15,9 @@ export default function SettingsPageRoute() {
       onUpdateSettings={context.handleUpdateSettings}
       onResetDatabase={context.handleResetDatabase}
       products={context.products}
+      staff={context.staff}           // ← ADDED: pass staff array from context
       operatorRole={context.operatorRole}
+      currentUser={context.currentUser}  // ← ADDED: pass current user for DB queries
     />
   );
 }
