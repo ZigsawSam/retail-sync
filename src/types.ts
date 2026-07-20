@@ -38,6 +38,19 @@ export interface Staff {
   attendance: Record<string, { present: boolean; hoursWorked?: number; wageEarned?: number }>;
 }
 
+// NEW: Staff login record (lives in DB, has history)
+export interface StaffLogin {
+  id: string;
+  userId: string;           // shop owner
+  name: string;
+  role: "cashier" | "inventory_manager";
+  email: string | null;
+  password: string;         // migrate to hashed later
+  isActive: boolean;
+  createdAt: string;
+  terminatedAt: string | null;
+}
+
 export interface SaleItem {
   productId: string;
   name: string;
@@ -66,6 +79,8 @@ export interface Sale {
   timestamp: string;
   clearanceStatus?: "Pending" | "Cleared";
   discountAmount?: number;
+  processedBy?: string;       // staff_login.id
+  processedByName?: string;   // denormalized for display
 }
 
 export interface Expense {
@@ -75,6 +90,8 @@ export interface Expense {
   description: string;
   timestamp: string;
   paymentMethod?: string;
+  loggedBy?: string;          // staff_login.id
+  loggedByName?: string;      // denormalized for display
 }
 
 export interface StaffAccount {
@@ -114,4 +131,3 @@ export interface ElectronicTx {
   description: string;
   timestamp: string;
 }
-
