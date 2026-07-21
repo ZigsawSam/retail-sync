@@ -1,1232 +1,671 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
-import { Product, Customer, Staff, Sale, Expense, StoreSettings, Cheque, ElectronicTx, ERPRole, StaffLogin } from "../types";
-import { isSupabaseConfigured, getSupabaseClient, transferMockDataToSupabase, parseSupabaseError, UserFriendlyError } from "../lib/supabase";
-import { getAppMode } from "@/lib/app-mode";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { createClient } from "@supabase/supabase-js";
+import type {
+  Product,
+  Customer,
+  CommissionAgent,
+  Staff,
+  StaffLogin,
+  Sale,
+  Expense,
+  StoreSettings,
+  Cheque,
+  ElectronicTx,
+  ERPRole,
+} from "../types";
 
-interface AppUser {
-  uid: string;
-  email: string | null;
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+);
+
+// ============================================
+// CUSTOM STAFF LOGIN (NOT Supabase Auth)
+// Staff log in by querying staff_logins table directly.
+// Only the owner uses Supabase Auth.
+// ============================================
+export interface StaffSession {
+  staffLoginId: string;
+  name: string;
+  role: "cashier" | "inventory_manager";
 }
 
 interface AppContextType {
-  currentUser: AppUser | null;
-  authLoading: boolean;
-  currentRole: ERPRole;
-  handleRoleChange: (role: ERPRole) => void;
-  operatorRole: ERPRole;
-  handleSwitchOperator: (role: ERPRole, password?: string, email?: string) => Promise<{ success: boolean; message: string }>;
-  settings: StoreSettings;
+  // Auth
+  currentUser: any;
+  staffSession: StaffSession | null;
+  isLoading: boolean;
+
+  // Data
   products: Product[];
   customers: Customer[];
+  commissionAgents: CommissionAgent[];
   staff: Staff[];
+  staffLogins: StaffLogin[];
   sales: Sale[];
   expenses: Expense[];
-  electronicTxs: ElectronicTx[];
+  settings: StoreSettings;
   cheques: Cheque[];
-  actualDrawerCash: number | null;
-  currency: string;
-  cashInHand: number;
-  totalSalesAllTime: number;
-  totalExpensesAllTime: number;
-  showInvoiceForm: boolean;
-  setShowInvoiceForm: (val: boolean) => void;
+  electronicTxs: ElectronicTx[];
 
-  useSupabaseActive: boolean;
-  setUseSupabaseActive: (active: boolean) => void;
-  refreshDataFromSupabase: () => Promise<void>;
+  // Computed
+  lowStockProducts: Product[];
+  overstockProducts: Product[];
 
-  supabaseError: UserFriendlyError | null;
-  setSupabaseError: (err: UserFriendlyError | null) => void;
-
-  handleAddProduct: (newProd: Product) => Promise<void>;
-  handleUpdateProductStock: (productId: string, newStock: number) => Promise<void>;
-  handleDeleteProduct: (productId: string) => Promise<void>;
-  handleAddCustomer: (newCust: Customer) => Promise<void>;
-  handleOnboardStaff: (newStaff: Staff) => Promise<void>;
-  handleLogAttendance: (staffId: string, date: string, present: boolean, hoursWorked?: number, wageEarned?: number) => Promise<void>;
-  handleAddSale: (newSale: Sale) => Promise<void>;
-  handleUpdateSale: (updatedSale: Sale) => Promise<void>;
-  handleAddExpense: (newExpense: Expense) => Promise<void>;
-  handleDeleteExpense: (id: string) => Promise<void>;
-  handleUpdateSettings: (newSettings: StoreSettings) => Promise<void>;
-  handleUpdateActualDrawerCash: (amount: number | null) => Promise<void>;
-  handleAddElectronicTx: (tx: ElectronicTx) => Promise<void>;
-  handleDeleteElectronicTx: (id: string) => Promise<void>;
-  handleAddCheque: (ch: Cheque) => Promise<void>;
-  handleDeleteCheque: (id: string) => Promise<void>;
+  // Actions
+  handleLogin: (email: string, password: string) => Promise<void>;
   handleLogout: () => Promise<void>;
-  handleResetDatabase: (options?: { cleanSlate?: boolean; shopName?: string; startingBalance?: number; currency?: string; taxRate?: number }) => Promise<void>;
+  handleStaffLogin: (email: string, password: string) => Promise<void>;
+  handleStaffLogout: () => void;
+  handleSwitchOperator: (role: ERPRole) => Promise<void>;
+
+  handleAddProduct: (product: Omit<Product, "id">) => Promise<void>;
+  handleUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  handleDeleteProduct: (id: string) => Promise<void>;
+
+  handleAddCustomer: (customer: Omit<Customer, "id" | "points" | "tier" | "totalSpent">) => Promise<void>;
+  handleUpdateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>;
+  handleDeleteCustomer: (id: string) => Promise<void>;
+
+  handleAddCommissionAgent: (agent: Omit<CommissionAgent, "totalEarnings">) => Promise<void>;
+  handleUpdateCommissionAgent: (phone: string, updates: Partial<CommissionAgent>) => Promise<void>;
+  handleDeleteCommissionAgent: (phone: string) => Promise<void>;
+
+  handleAddStaff: (staff: Omit<Staff, "id" | "attendance">) => Promise<void>;
+  handleUpdateStaff: (id: string, updates: Partial<Staff>) => Promise<void>;
+  handleDeleteStaff: (id: string) => Promise<void>;
+  handleMarkAttendance: (staffId: string, date: string, present: boolean, hoursWorked?: number) => Promise<void>;
+
+  handleAddSale: (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => Promise<void>;
+  handleUpdateSale: (id: string, updates: Partial<Sale>) => Promise<void>;
+  handleDeleteSale: (id: string) => Promise<void>;
+
+  handleAddExpense: (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName">) => Promise<void>;
+  handleUpdateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
+  handleDeleteExpense: (id: string) => Promise<void>;
+
+  handleUpdateSettings: (updates: Partial<StoreSettings>) => Promise<void>;
+  handleResetDatabase: () => Promise<void>;
+
+  handleAddCheque: (cheque: Omit<Cheque, "id" | "timestamp">) => Promise<void>;
+  handleUpdateCheque: (id: string, updates: Partial<Cheque>) => Promise<void>;
+  handleDeleteCheque: (id: string) => Promise<void>;
+
+  handleAddElectronicTx: (tx: Omit<ElectronicTx, "id" | "timestamp">) => Promise<void>;
+  handleUpdateElectronicTx: (id: string, updates: Partial<ElectronicTx>) => Promise<void>;
+  handleDeleteElectronicTx: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-  const [supabaseError, setSupabaseError] = useState<UserFriendlyError | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // --- ERP ROLE-BASED ACCESS CONTROL STATES ---
-  const [operatorRole, setOperatorRole] = useState<ERPRole>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("retail_sync_operator_role");
-      if (saved === "admin" || saved === "cashier" || saved === "inventory_manager") {
-        return saved as ERPRole;
-      }
-    }
-    return "admin";
-  });
-
-  const [currentRole, setCurrentRole] = useState<ERPRole>(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("retail_sync_erp_role");
-      if (saved === "admin" || saved === "cashier" || saved === "inventory_manager") {
-        return saved as ERPRole;
-      }
-    }
-    return "admin";
-  });
-
-  useEffect(() => {
-    if (operatorRole !== "admin" && currentRole !== operatorRole) {
-      setCurrentRole(operatorRole);
-    }
-  }, [operatorRole, currentRole]);
-
-  const handleRoleChange = (role: ERPRole) => {
-    if (operatorRole !== "admin") return;
-    setCurrentRole(role);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("retail_sync_erp_role", role);
-    }
-  };
-
-  // FIXED: handleSwitchOperator now queries staff_logins table instead of settings.staffAccounts
-  const handleSwitchOperator = async (
-    role: ERPRole,
-    password?: string,
-    email?: string
-  ): Promise<{ success: boolean; message: string }> => {
-    if (!currentUser) {
-      return { success: false, message: "No owner session found." };
-    }
-
-    // Admin login still uses settings.ownerPassword
-    if (role === "admin") {
-      const adminPass = settings.ownerPassword || "admin";
-      if (password !== adminPass) {
-        return { success: false, message: "Invalid Owner / Admin access password!" };
-      }
-      setOperatorRole("admin");
-      setCurrentRole("admin");
-      localStorage.setItem("retail_sync_operator_role", "admin");
-      localStorage.setItem("retail_sync_erp_role", "admin");
-      return { success: true, message: "Switched to ADMIN mode." };
-    }
-
-    // Cashier / Stockist: query staff_logins table, NOT settings
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      return { success: false, message: "Supabase not connected." };
-    }
-
-    const { data: staffRecs, error } = await supabase
-      .from("staff_logins")
-      .select("*")
-      .eq("user_id", currentUser.uid)
-      .eq("role", role)
-      .eq("is_active", true);
-
-    if (error) {
-      return { success: false, message: "Database error fetching staff record." };
-    }
-
-    if (!staffRecs || staffRecs.length === 0) {
-      return {
-        success: false,
-        message: `No active ${role === "inventory_manager" ? "Stock Manager" : "Cashier"} found. Onboard them first in Settings.`,
-      };
-    }
-
-    const staffRec = staffRecs[0] as StaffLogin;
-
-    if (email && staffRec.email && email.trim().toLowerCase() !== staffRec.email.trim().toLowerCase()) {
-      return { success: false, message: "Invalid login email / username!" };
-    }
-
-    if (password !== staffRec.password) {
-      return { success: false, message: "Invalid password!" };
-    }
-
-    // SUCCESS: store staff session with DB reference
-    setOperatorRole(role);
-    setCurrentRole(role);
-
-    const staffSession = {
-      ownerUid: currentUser.uid,
-      role: role,
-      email: staffRec.email,
-      staffLoginId: staffRec.id,
-      staffName: staffRec.name,
-    };
-
-    sessionStorage.setItem("retail_sync_staff_session", JSON.stringify(staffSession));
-    localStorage.setItem("retail_sync_operator_role", role);
-    localStorage.setItem("retail_sync_erp_role", role);
-
-    return {
-      success: true,
-      message: `Authenticated as ${staffRec.name} (${role === "inventory_manager" ? "Stock Manager" : "Cashier"}).`,
-    };
-  };
-
-  // --- PERSISTENT DATABASE STATES ---
-  const [settings, setSettings] = useState<StoreSettings>({
-    shopName: "Loading Outlet...",
-    taxRate: 5,
-    currency: "Rs.",
-    startingBalance: 12500,
-    theme: "bauhaus",
-    ownerPassword: "admin",
-    staffAccounts: {
-      cashier: { username: "Cashier Desk", password: "cashier123", isActive: true },
-      inventory: { username: "Inventory Manager", password: "stock123", isActive: true }
-    }
-  });
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [commissionAgents, setCommissionAgents] = useState<CommissionAgent[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
+  const [staffLogins, setStaffLogins] = useState<StaffLogin[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [electronicTxs, setElectronicTxs] = useState<ElectronicTx[]>([]);
-  const [cheques, setCheques] = useState<Cheque[]>([]);
-  const [actualDrawerCash, setActualDrawerCash] = useState<number | null>(null);
-
-  const [useSupabaseActive, setUseSupabaseActiveState] = useState<boolean>(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("use_supabase") === "true" || isSupabaseConfigured();
-    }
-    return false;
+  const [settings, setSettings] = useState<StoreSettings>({
+    shopName: "My Shop",
+    taxRate: 5,
+    currency: "Rs",
+    startingBalance: 0,
   });
+  const [cheques, setCheques] = useState<Cheque[]>([]);
+  const [electronicTxs, setElectronicTxs] = useState<ElectronicTx[]>([]);
 
-  const setUseSupabaseActive = (active: boolean) => {
-    setUseSupabaseActiveState(active);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("use_supabase", active ? "true" : "false");
-    }
-  };
-
-  const fetchSupabaseData = async (uid: string) => {
-    const supabase = getSupabaseClient();
-    if (!supabase) return;
-    try {
-      setSupabaseError(null);
-
-      // 1. Settings
-      const { data: settingsData, error: settingsError } = await supabase
-        .from("settings")
-        .select("*")
-        .eq("id", uid)
-        .maybeSingle();
-
-      if (settingsError) {
-        console.error("Failed to fetch settings:", settingsError);
-        const parsed = parseSupabaseError(settingsError);
-        setSupabaseError(parsed);
-      }
-
-      if (settingsData) {
-        let loadedSettings = { ...settingsData } as StoreSettings;
-        if (typeof window !== "undefined") {
-          const fallback = localStorage.getItem("retail_sync_fallback_settings_" + uid);
-          if (fallback) {
-            try {
-              const parsedFallback = JSON.parse(fallback);
-              loadedSettings = {
-                ...parsedFallback,
-                ...loadedSettings,
-                staffAccounts: loadedSettings.staffAccounts || parsedFallback.staffAccounts,
-                ownerPassword: loadedSettings.ownerPassword || parsedFallback.ownerPassword
-              };
-            } catch (err) {
-              console.error("Failed to parse fallback settings", err);
-            }
-          }
-        }
-        setSettings(loadedSettings);
-      } else {
-        console.log("No settings found for new user/shop. Seeding full mock data...");
-        try {
-          const res = await transferMockDataToSupabase(uid);
-          if (!res.success) {
-            if (res.errorDetails) {
-              setSupabaseError(res.errorDetails);
-            }
-            throw new Error(res.message);
-          }
-          const { data: newSettingsData, error: newSettingsError } = await supabase
-            .from("settings")
-            .select("*")
-            .eq("id", uid)
-            .maybeSingle();
-
-          if (newSettingsError) throw newSettingsError;
-
-          if (newSettingsData) {
-            setSettings(newSettingsData as StoreSettings);
-          } else {
-            throw new Error("Could not fetch newly upserted settings");
-          }
-        } catch (seedErr: any) {
-          console.error("Full seeding failed, falling back to basic settings:", seedErr);
-          const parsed = parseSupabaseError(seedErr);
-          setSupabaseError(parsed);
-
-          const defaultSettings = {
-            id: uid,
-            shopName: "Urban Mart",
-            taxRate: 5,
-            startingBalance: 12500,
-            currency: "$",
-            userId: uid,
-            quickAddProductIds: []
-          };
-          try {
-            const { error: upsertErr } = await supabase.from("settings").upsert(defaultSettings);
-            if (upsertErr) throw upsertErr;
-            setSettings(defaultSettings as StoreSettings);
-          } catch (fallbackErr: any) {
-            console.error("Fallback settings upsert failed:", fallbackErr);
-            const parsedFallback = parseSupabaseError(fallbackErr);
-            setSupabaseError(parsedFallback);
-            setSettings(defaultSettings as StoreSettings);
-          }
-        }
-      }
-
-      async function runQuery<T>(queryPromise: PromiseLike<{ data: T | null, error: any }>, callback: (data: T) => void, tableName: string) {
-        const { data, error } = await queryPromise;
-        if (error) {
-          console.error(`Error querying ${tableName}:`, error);
-          const parsed = parseSupabaseError(error);
-          if (parsed.type === "rls_violation") {
-            setSupabaseError(parsed);
-          }
-        } else if (data) {
-          callback(data);
-        }
-      }
-
-      await runQuery(supabase.from("products").select("*").eq("userId", uid), setProducts as any, "products");
-      await runQuery(supabase.from("customers").select("*").eq("userId", uid), setCustomers as any, "customers");
-      await runQuery(supabase.from("staff").select("*").eq("userId", uid), setStaff as any, "staff");
-      await runQuery(supabase.from("sales").select("*").eq("userId", uid), setSales as any, "sales");
-      await runQuery(supabase.from("expenses").select("*").eq("userId", uid), setExpenses as any, "expenses");
-      await runQuery(supabase.from("electronicTxs").select("*").eq("userId", uid), setElectronicTxs as any, "electronicTxs");
-      await runQuery(supabase.from("cheques").select("*").eq("userId", uid), setCheques as any, "cheques");
-
-      const { data: drawerData, error: drawerErr } = await supabase
-        .from("actualDrawerCash")
-        .select("*")
-        .eq("userId", uid)
-        .eq("date", "2026-07-14");
-
-      if (drawerErr) {
-        const parsed = parseSupabaseError(drawerErr);
-        if (parsed.type === "rls_violation") setSupabaseError(parsed);
-      } else if (drawerData && drawerData.length > 0) {
-        setActualDrawerCash(drawerData[0].amount);
-      } else {
-        setActualDrawerCash(null);
-      }
-    } catch (err: any) {
-      console.error("Failed to load Supabase records:", err);
-      const parsed = parseSupabaseError(err);
-      setSupabaseError(parsed);
-    }
-  };
-
-  const refreshDataFromSupabase = async () => {
-    if (currentUser) {
-      await fetchSupabaseData(currentUser.uid);
-    }
-  };
-
-  // --- AUTH MONITOR ---
+  // Load staff session from sessionStorage on mount
   useEffect(() => {
-    const supabase = getSupabaseClient();
-
-    const staffSessionStr =
-      typeof window !== "undefined"
-        ? sessionStorage.getItem("retail_sync_staff_session")
-        : null;
-
-    if (staffSessionStr) {
+    const saved = sessionStorage.getItem("staffSession");
+    if (saved) {
       try {
-        const staffSession = JSON.parse(staffSessionStr);
-        if (staffSession?.ownerUid && staffSession?.role) {
-          setCurrentUser({ uid: staffSession.ownerUid, email: staffSession.email ?? null });
-          setOperatorRole(staffSession.role);
-          setCurrentRole(staffSession.role);
-          setAuthLoading(false);
-          return;
-        }
-      } catch (e) {
-        console.error("Failed to parse staff session, clearing it:", e);
-        sessionStorage.removeItem("retail_sync_staff_session");
-      }
+        setStaffSession(JSON.parse(saved));
+      } catch {}
     }
-
-    const savedLocalUser =
-      typeof window !== "undefined"
-        ? localStorage.getItem("retail_sync_local_user")
-        : null;
-
-    if (savedLocalUser && JSON.parse(savedLocalUser).uid === "local-demo") {
-      setCurrentUser(JSON.parse(savedLocalUser));
-      setAuthLoading(false);
-      return;
-    }
-
-    if (!supabase) {
-      setAuthLoading(false);
-      return;
-    }
-
-    const mode = getAppMode();
-
-    if (mode === "offline" && savedLocalUser) {
-      setCurrentUser(JSON.parse(savedLocalUser));
-      setAuthLoading(false);
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setCurrentUser({
-          uid: session.user.id,
-          email: session.user.email ?? null,
-        });
-      } else {
-        setCurrentUser(null);
-      }
-      setAuthLoading(false);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user) {
-        setCurrentUser({
-          uid: session.user.id,
-          email: session.user.email ?? null,
-        });
-      } else {
-        setCurrentUser(null);
-      }
-      setAuthLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
   }, []);
 
-  // --- REAL-TIME DATA SYNC PIPELINES ---
+  // Persist staff session
   useEffect(() => {
-    if (!currentUser) return;
-
-    const uid = currentUser.uid;
-
-    if (uid === "local-demo") {
-      const storedSettings = localStorage.getItem("retail_sync_settings");
-      const storedProducts = localStorage.getItem("retail_sync_products");
-      const storedCustomers = localStorage.getItem("retail_sync_customers");
-      const storedStaff = localStorage.getItem("retail_sync_staff");
-      const storedSales = localStorage.getItem("retail_sync_sales");
-      const storedExpenses = localStorage.getItem("retail_sync_expenses");
-      const storedElectronic = localStorage.getItem("retail_sync_electronicTxs");
-      const storedCheques = localStorage.getItem("retail_sync_cheques");
-      const storedDrawer = localStorage.getItem("retail_sync_drawer_2026-07-14");
-
-      setSettings(storedSettings ? JSON.parse(storedSettings) : {
-        shopName: "Urban Mart (Offline Sandbox)",
-        taxRate: 5,
-        currency: "$",
-        startingBalance: 0,
-        quickAddProductIds: [],
-        theme: "bauhaus"
-      });
-      setProducts(storedProducts ? JSON.parse(storedProducts) : []);
-      setCustomers(storedCustomers ? JSON.parse(storedCustomers) : []);
-      setStaff(storedStaff ? JSON.parse(storedStaff) : []);
-      setSales(storedSales ? JSON.parse(storedSales) : []);
-      setExpenses(storedExpenses ? JSON.parse(storedExpenses) : []);
-      setElectronicTxs(storedElectronic ? JSON.parse(storedElectronic) : []);
-      setCheques(storedCheques ? JSON.parse(storedCheques) : []);
-      setActualDrawerCash(storedDrawer ? JSON.parse(storedDrawer) : null);
-      return;
-    }
-
-    fetchSupabaseData(uid);
-  }, [currentUser?.uid]);
-
-  // Auto persist to LocalStorage when in local-demo mode
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_settings", JSON.stringify(settings));
-    }
-  }, [settings, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_products", JSON.stringify(products));
-    }
-  }, [products, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_customers", JSON.stringify(customers));
-    }
-  }, [customers, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_staff", JSON.stringify(staff));
-    }
-  }, [staff, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_sales", JSON.stringify(sales));
-    }
-  }, [sales, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_expenses", JSON.stringify(expenses));
-    }
-  }, [expenses, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_electronicTxs", JSON.stringify(electronicTxs));
-    }
-  }, [electronicTxs, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_cheques", JSON.stringify(cheques));
-    }
-  }, [cheques, currentUser]);
-
-  useEffect(() => {
-    if (currentUser?.uid === "local-demo") {
-      localStorage.setItem("retail_sync_drawer_2026-07-14", JSON.stringify(actualDrawerCash));
-    }
-  }, [actualDrawerCash, currentUser]);
-
-  // --- HANDLERS ---
-  const handleAddProduct = async (newProd: Product) => {
-    if (!currentUser) return;
-
-    const exists = products.some(p => p.barcode === newProd.barcode);
-    if (exists) {
-      setProducts(prev => prev.map(p => p.barcode === newProd.barcode ? { ...p, quantity: p.quantity + newProd.quantity } : p));
+    if (staffSession) {
+      sessionStorage.setItem("staffSession", JSON.stringify(staffSession));
     } else {
-      setProducts(prev => [...prev, newProd]);
+      sessionStorage.removeItem("staffSession");
     }
+  }, [staffSession]);
 
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          if (exists) {
-            const matching = products.find(p => p.barcode === newProd.barcode)!;
-            await supabase.from("products").upsert({
-              ...matching,
-              quantity: matching.quantity + newProd.quantity,
-              userId: currentUser.uid
-            });
-          } else {
-            await supabase.from("products").upsert({
-              ...newProd,
-              userId: currentUser.uid
-            });
-          }
-        } catch (e) {
-          console.error("Supabase Error products insert:", e);
-        }
-      }
-    }
-  };
+  // Auth listener
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      setCurrentUser(session?.user ?? null);
+      setIsLoading(false);
+    });
 
-  const handleUpdateProductStock = async (productId: string, newStock: number) => {
-    if (!currentUser) return;
-    setProducts(prev => prev.map(p => p.id === productId ? { ...p, quantity: newStock } : p));
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setCurrentUser(session?.user ?? null);
+      setIsLoading(false);
+    });
 
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("products").update({ quantity: newStock }).eq("id", productId);
-        } catch (e) {
-          console.error("Supabase Error product stock update:", e);
-        }
-      }
-    }
-  };
-
-  const handleDeleteProduct = async (productId: string) => {
-    if (!currentUser) return;
-    setProducts(prev => prev.filter(p => p.id !== productId));
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("products").delete().eq("id", productId);
-        } catch (e) {
-          console.error("Supabase Error products delete:", e);
-        }
-      }
-    }
-  };
-
-  const handleAddCustomer = async (newCust: Customer) => {
-    if (!currentUser) return;
-    const exists = customers.some(c => c.phone === newCust.phone);
-    if (exists) return;
-    setCustomers(prev => [...prev, newCust]);
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("customers").upsert({
-            ...newCust,
-            userId: currentUser.uid
-          });
-        } catch (e) {
-          console.error("Supabase Error customers insert:", e);
-        }
-      }
-    }
-  };
-
-  const handleOnboardStaff = async (newStaff: Staff) => {
-    if (!currentUser) return;
-    setStaff(prev => [...prev, newStaff]);
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("staff").upsert({
-            ...newStaff,
-            userId: currentUser.uid
-          });
-        } catch (e) {
-          console.error("Supabase Error staff insert:", e);
-        }
-      }
-    }
-  };
-
-  const handleLogAttendance = async (
-    staffId: string,
-    date: string,
-    present: boolean,
-    hoursWorked?: number,
-    wageEarned?: number
-  ) => {
-    if (!currentUser) return;
-    setStaff(prev => prev.map(s => {
-      if (s.id !== staffId) return s;
-      return {
-        ...s,
-        attendance: {
-          ...s.attendance,
-          [date]: { present, hoursWorked: hoursWorked || null, wageEarned: wageEarned || 0 }
-        }
-      };
-    }));
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          const member = staff.find(s => s.id === staffId);
-          if (member) {
-            const updatedAttendance = {
-              ...member.attendance,
-              [date]: { present, hoursWorked: hoursWorked || null, wageEarned: wageEarned || 0 }
-            };
-            await supabase.from("staff").update({ attendance: updatedAttendance }).eq("id", staffId);
-          }
-        } catch (e) {
-          console.error("Supabase Error attendance update:", e);
-        }
-      }
-    }
-  };
-
-  // FIXED: handleAddSale now logs which staff processed the sale
-  const handleAddSale = async (newSale: Sale) => {
-    if (!currentUser) return;
-
-    // Get current staff info from session
-    const staffSessionStr = sessionStorage.getItem("retail_sync_staff_session");
-    let staffInfo = { id: null as string | null, name: null as string | null };
-
-    if (staffSessionStr) {
-      try {
-        const s = JSON.parse(staffSessionStr);
-        staffInfo = { id: s.staffLoginId || null, name: s.staffName || null };
-      } catch (e) { /* ignore */ }
-    }
-
-    // Attach staff info to the sale
-    const saleWithStaff: Sale = {
-      ...newSale,
-      processedBy: staffInfo.id || undefined,
-      processedByName: staffInfo.name || undefined,
+    return () => {
+      authListener?.subscription.unsubscribe();
     };
+  }, []);
 
-    setSales(prev => [...prev, saleWithStaff]);
-    setProducts(prev => prev.map(p => {
-      const item = newSale.items.find(it => it.productId === p.id);
-      if (item) return { ...p, quantity: Math.max(0, p.quantity - item.quantity) };
-      return p;
-    }));
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          const payload = {
-            ...saleWithStaff,
-            userId: currentUser.uid,
-          };
-          await supabase.from("sales").upsert(payload);
-
-          for (const item of newSale.items) {
-            const p = products.find(prod => prod.id === item.productId);
-            if (p) {
-              await supabase.from("products").update({
-                quantity: Math.max(0, p.quantity - item.quantity)
-              }).eq("id", p.id);
-            }
-          }
-        } catch (e) {
-          console.error("Supabase Error sales insert:", e);
-        }
-      }
-    }
-  };
-
-  const handleUpdateSale = async (updatedSale: Sale) => {
-    if (!currentUser) return;
-    setSales(prev => prev.map(s => s.id === updatedSale.id ? updatedSale : s));
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          const payload = {
-            ...updatedSale,
-            userId: currentUser.uid
-          };
-          let result = await supabase.from("sales").upsert(payload);
-          if (result.error) {
-            console.warn("Initial sale update failed. Retrying without discountAmount:", result.error);
-            const { discountAmount, ...withoutDiscount } = payload;
-            result = await supabase.from("sales").upsert(withoutDiscount);
-            if (result.error) {
-              console.warn("Retrying without clearanceStatus:", result.error);
-              const { clearanceStatus, ...withoutClearance } = payload;
-              result = await supabase.from("sales").upsert(withoutClearance);
-              if (result.error) {
-                console.warn("Retrying without both:", result.error);
-                const { clearanceStatus: c, discountAmount: d, ...sanitized } = payload;
-                result = await supabase.from("sales").upsert(sanitized);
-                if (result.error) {
-                  console.error("All sale update attempts failed:", result.error);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error("Supabase Error sale update:", e);
-        }
-      }
-    }
-  };
-
-  // FIXED: handleAddExpense now logs which staff logged the expense
-  const handleAddExpense = async (newExpense: Expense) => {
+  // Fetch all data when user is authenticated
+  const fetchAllData = useCallback(async () => {
     if (!currentUser) return;
 
-    // Get current staff info from session
-    const staffSessionStr = sessionStorage.getItem("retail_sync_staff_session");
-    let staffInfo = { id: null as string | null, name: null as string | null };
+    const userId = currentUser.id;
 
-    if (staffSessionStr) {
-      try {
-        const s = JSON.parse(staffSessionStr);
-        staffInfo = { id: s.staffLoginId || null, name: s.staffName || null };
-      } catch (e) { /* ignore */ }
+    // Products
+    const { data: productsData } = await supabase
+      .from("products")
+      .select("*")
+      .eq("user_id", userId);
+    if (productsData) setProducts(productsData);
+
+    // Customers
+    const { data: customersData } = await supabase
+      .from("customers")
+      .select("*")
+      .eq("user_id", userId);
+    if (customersData) setCustomers(customersData);
+
+    // Commission agents
+    const { data: agentsData } = await supabase
+      .from("commission_agents")
+      .select("*")
+      .eq("user_id", userId);
+    if (agentsData) setCommissionAgents(agentsData);
+
+    // Staff
+    const { data: staffData } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("user_id", userId);
+    if (staffData) setStaff(staffData);
+
+    // Staff logins
+    const { data: loginsData } = await supabase
+      .from("staff_logins")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (loginsData) {
+      setStaffLogins(
+        loginsData.map((l: any) => ({
+          id: l.id,
+          userId: l.user_id,
+          staffId: l.staff_id,
+          name: l.name,
+          role: l.role,
+          email: l.email,
+          password: l.password,
+          isActive: l.is_active,
+          createdAt: l.created_at,
+          terminatedAt: l.terminated_at,
+        }))
+      );
     }
 
-    const expenseWithStaff: Expense = {
-      ...newExpense,
-      loggedBy: staffInfo.id || undefined,
-      loggedByName: staffInfo.name || undefined,
-    };
+    // Sales
+    const { data: salesData } = await supabase
+      .from("sales")
+      .select("*")
+      .eq("user_id", userId)
+      .order("timestamp", { ascending: false });
+    if (salesData) setSales(salesData);
 
-    setExpenses(prev => [...prev, expenseWithStaff]);
+    // Expenses
+    const { data: expensesData } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("user_id", userId)
+      .order("timestamp", { ascending: false });
+    if (expensesData) setExpenses(expensesData);
 
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          const payload = {
-            ...expenseWithStaff,
-            userId: currentUser.uid,
-          };
-          const { error } = await supabase.from("expenses").upsert(payload);
-          if (error) {
-            console.warn("Initial expense upsert failed:", error);
-            const { paymentMethod, ...sanitized } = payload;
-            const { error: retryError } = await supabase.from("expenses").upsert(sanitized);
-            if (retryError) {
-              console.error("Sanitized expense upsert retry failed:", retryError);
-            }
-          }
-        } catch (e) {
-          console.error("Supabase Error expense insert:", e);
-        }
-      }
-    }
-  };
-
-  const handleDeleteExpense = async (id: string) => {
-    if (!currentUser) return;
-    setExpenses(prev => prev.filter(e => e.id !== id));
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("expenses").delete().eq("id", id);
-        } catch (e) {
-          console.error("Supabase Error expense delete:", e);
-        }
-      }
-    }
-  };
-
-  const handleUpdateSettings = async (newSettings: StoreSettings) => {
-    if (!currentUser) return;
-    setSettings(newSettings);
-
-    if (typeof window !== "undefined") {
-      localStorage.setItem("retail_sync_fallback_settings_" + currentUser.uid, JSON.stringify(newSettings));
+    // Settings
+    const { data: settingsData } = await supabase
+      .from("settings")
+      .select("*")
+      .eq("id", userId)
+      .single();
+    if (settingsData) {
+      setSettings({
+        shopName: settingsData.shop_name || "My Shop",
+        taxRate: settingsData.tax_rate || 5,
+        currency: settingsData.currency || "Rs",
+        startingBalance: settingsData.starting_balance || 0,
+        quickAddProductIds: settingsData.quick_add_product_ids || [],
+        theme: settingsData.theme || "enterprise",
+        staffAccounts: settingsData.staffAccounts || {},
+        ownerPassword: settingsData.owner_password,
+      });
     }
 
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          const payload = {
-            ...newSettings,
-            id: currentUser.uid,
-            userId: currentUser.uid
-          };
-          const { error } = await supabase.from("settings").upsert(payload);
-          if (error) {
-            console.warn("Initial settings upsert failed. Retrying with sanitized payload.", error);
-            const sanitizedPayload = { ...payload };
-            delete (sanitizedPayload as any).theme;
-            delete (sanitizedPayload as any).staffAccounts;
-            delete (sanitizedPayload as any).ownerPassword;
-            delete (sanitizedPayload as any).quickAddProductIds;
+    // Cheques
+    const { data: chequesData } = await supabase
+      .from("cheques")
+      .select("*")
+      .eq("user_id", userId);
+    if (chequesData) setCheques(chequesData);
 
-            const { error: retryError } = await supabase.from("settings").upsert(sanitizedPayload);
-            if (retryError) {
-              console.error("Sanitized retry failed:", retryError);
-            }
-          }
-        } catch (e) {
-          console.error("Supabase Error settings upsert:", e);
-        }
-      }
-    }
-  };
+    // Electronic transactions
+    const { data: electronicData } = await supabase
+      .from("electronic_transactions")
+      .select("*")
+      .eq("user_id", userId);
+    if (electronicData) setElectronicTxs(electronicData);
+  }, [currentUser]);
 
-  const handleUpdateActualDrawerCash = async (amount: number | null) => {
-    if (!currentUser) return;
-    setActualDrawerCash(amount);
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
 
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          if (amount === null) {
-            await supabase.from("actualDrawerCash").delete().eq("userId", currentUser.uid).eq("date", "2026-07-14");
-          } else {
-            await supabase.from("actualDrawerCash").upsert({
-              id: `${currentUser.uid}_drawer-2026-07-14`,
-              date: "2026-07-14",
-              amount: amount,
-              userId: currentUser.uid
-            });
-          }
-        } catch (e) {
-          console.error("Supabase Error drawer cash update:", e);
-        }
-      }
-    }
-  };
+  // ============================================
+  // AUTH FUNCTIONS
+  // ============================================
 
-  const handleAddElectronicTx = async (tx: ElectronicTx) => {
-    if (!currentUser) return;
-    setElectronicTxs(prev => [...prev, tx]);
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("electronicTxs").upsert({
-            ...tx,
-            userId: currentUser.uid
-          });
-        } catch (e) {
-          console.error("Supabase Error electronic tx insert:", e);
-        }
-      }
-    }
-  };
-
-  const handleDeleteElectronicTx = async (id: string) => {
-    if (!currentUser) return;
-    setElectronicTxs(prev => prev.filter(t => t.id !== id));
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("electronicTxs").delete().eq("id", id);
-        } catch (e) {
-          console.error("Supabase Error electronic tx delete:", e);
-        }
-      }
-    }
-  };
-
-  const handleAddCheque = async (ch: Cheque) => {
-    if (!currentUser) return;
-    setCheques(prev => [...prev, ch]);
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("cheques").upsert({
-            ...ch,
-            userId: currentUser.uid
-          });
-        } catch (e) {
-          console.error("Supabase Error cheque insert:", e);
-        }
-      }
-    }
-  };
-
-  const handleDeleteCheque = async (id: string) => {
-    if (!currentUser) return;
-    setCheques(prev => prev.filter(c => c.id !== id));
-
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          await supabase.from("cheques").delete().eq("id", id);
-        } catch (e) {
-          console.error("Supabase Error cheque delete:", e);
-        }
-      }
-    }
+  const handleLogin = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
   };
 
   const handleLogout = async () => {
-    try {
-      const supabase = getSupabaseClient();
-
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
-
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("retail_sync_local_user");
-        localStorage.removeItem("retail_sync_operator_role");
-        localStorage.removeItem("retail_sync_erp_role");
-        sessionStorage.removeItem("retail_sync_staff_session");
-      }
-
-      setCurrentUser(null);
-      setOperatorRole("admin");
-      setCurrentRole("admin");
-
-      setProducts([]);
-      setCustomers([]);
-      setStaff([]);
-      setSales([]);
-      setExpenses([]);
-      setElectronicTxs([]);
-      setCheques([]);
-      setActualDrawerCash(null);
-
-    } catch (err) {
-      console.error("Logout failed:", err);
-    }
+    await supabase.auth.signOut();
+    setCurrentUser(null);
+    setStaffSession(null);
+    sessionStorage.removeItem("staffSession");
   };
 
-  const handleResetDatabase = async (options?: { cleanSlate?: boolean; shopName?: string; startingBalance?: number; currency?: string; taxRate?: number }) => {
-    if (!currentUser) return;
+  // CUSTOM STAFF LOGIN — queries staff_logins table directly
+  // Does NOT use Supabase Auth (staff are not auth.users)
+  const handleStaffLogin = async (email: string, password: string) => {
+    if (!currentUser) throw new Error("Owner not logged in");
 
-    const isCleanSlate = options?.cleanSlate ?? false;
-    const targetShopName = options?.shopName ?? "Urban Mart";
-    const targetStartingBalance = options?.startingBalance ?? 12500;
-    const targetCurrency = options?.currency ?? "$";
-    const targetTaxRate = options?.taxRate ?? 5;
+    const { data, error } = await supabase
+      .from("staff_logins")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .eq("email", email)
+      .eq("password", password)
+      .eq("is_active", true)
+      .single();
 
-    if (isCleanSlate) {
-      setProducts([]);
-      setCustomers([]);
-      setStaff([]);
-      setSales([]);
-      setExpenses([]);
-      setElectronicTxs([]);
-      setCheques([]);
-      setActualDrawerCash(null);
-      setSettings({
-        shopName: targetShopName,
-        taxRate: targetTaxRate,
-        currency: targetCurrency,
-        startingBalance: targetStartingBalance,
-        quickAddProductIds: []
-      });
-    } else {
-      setProducts([]);
-      setCustomers([]);
-      setStaff([]);
-      setSales([]);
-      setExpenses([]);
-      setElectronicTxs([]);
-      setCheques([]);
-      setActualDrawerCash(null);
-      setSettings({
-        shopName: "Urban Mart",
-        taxRate: 5,
-        currency: "$",
-        startingBalance: 0,
-        quickAddProductIds: []
-      });
+    if (error || !data) {
+      throw new Error("Invalid staff credentials");
     }
 
-    if (currentUser.uid !== "local-demo") {
-      const supabase = getSupabaseClient();
-      if (supabase) {
-        try {
-          const tables = ["products", "customers", "staff", "sales", "expenses", "electronicTxs", "cheques", "actualDrawerCash"];
-          for (const table of tables) {
-            await supabase.from(table).delete().eq("userId", currentUser.uid);
-          }
+    const session: StaffSession = {
+      staffLoginId: data.id,
+      name: data.name,
+      role: data.role,
+    };
 
-          if (isCleanSlate) {
-            await supabase.from("settings").upsert({
-              id: currentUser.uid,
-              shopName: targetShopName,
-              taxRate: targetTaxRate,
-              startingBalance: targetStartingBalance,
-              currency: targetCurrency,
-              userId: currentUser.uid,
-              quickAddProductIds: []
-            });
-          } else {
-            await supabase.from("settings").upsert({
-              id: currentUser.uid,
-              shopName: "Urban Mart",
-              taxRate: 5,
-              startingBalance: 0,
-              currency: "$",
-              userId: currentUser.uid,
-              quickAddProductIds: []
-            });
-            await transferMockDataToSupabase(currentUser.uid);
-          }
-        } catch (e) {
-          console.error("Supabase Error reset database:", e);
-        }
-      }
-    }
+    setStaffSession(session);
   };
 
-  const resetStoreState = () => {
+  const handleStaffLogout = () => {
+    setStaffSession(null);
+    sessionStorage.removeItem("staffSession");
+  };
+
+  // Switch operator role (for owner)
+  const handleSwitchOperator = async (role: ERPRole) => {
+    if (role === "admin") {
+      setStaffSession(null);
+      sessionStorage.removeItem("staffSession");
+      return;
+    }
+
+    if (!currentUser) throw new Error("Owner not logged in");
+
+    const { data, error } = await supabase
+      .from("staff_logins")
+      .select("*")
+      .eq("user_id", currentUser.id)
+      .eq("role", role === "cashier" ? "cashier" : "inventory_manager")
+      .eq("is_active", true)
+      .single();
+
+    if (error || !data) {
+      throw new Error(`No active ${role} found. Onboard staff in Settings.`);
+    }
+
+    const session: StaffSession = {
+      staffLoginId: data.id,
+      name: data.name,
+      role: data.role,
+    };
+
+    setStaffSession(session);
+  };
+
+  // ============================================
+  // DATA MUTATION FUNCTIONS
+  // ============================================
+
+  const getAuditFields = () => {
+    if (staffSession) {
+      return {
+        processed_by: staffSession.staffLoginId,
+        processed_by_name: staffSession.name,
+        logged_by: staffSession.staffLoginId,
+        logged_by_name: staffSession.name,
+      };
+    }
+    return {};
+  };
+
+  const handleAddProduct = async (product: Omit<Product, "id">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    const { data, error } = await supabase
+      .from("products")
+      .insert([{ ...product, user_id: currentUser.id }])
+      .select()
+      .single();
+    if (error) throw error;
+    setProducts((prev) => [...prev, data]);
+  };
+
+  const handleUpdateProduct = async (id: string, updates: Partial<Product>) => {
+    const { error } = await supabase.from("products").update(updates).eq("id", id);
+    if (error) throw error;
+    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    const { error } = await supabase.from("products").delete().eq("id", id);
+    if (error) throw error;
+    setProducts((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const handleAddCustomer = async (customer: Omit<Customer, "id" | "points" | "tier" | "totalSpent">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    const newCustomer = { ...customer, points: 0, tier: "Bronze" as const, totalSpent: 0, user_id: currentUser.id };
+    const { data, error } = await supabase.from("customers").insert([newCustomer]).select().single();
+    if (error) throw error;
+    setCustomers((prev) => [...prev, data]);
+  };
+
+  const handleUpdateCustomer = async (id: string, updates: Partial<Customer>) => {
+    const { error } = await supabase.from("customers").update(updates).eq("id", id);
+    if (error) throw error;
+    setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+  };
+
+  const handleDeleteCustomer = async (id: string) => {
+    const { error } = await supabase.from("customers").delete().eq("id", id);
+    if (error) throw error;
+    setCustomers((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleAddCommissionAgent = async (agent: Omit<CommissionAgent, "totalEarnings">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    const newAgent = { ...agent, totalEarnings: 0, user_id: currentUser.id };
+    const { data, error } = await supabase.from("commission_agents").insert([newAgent]).select().single();
+    if (error) throw error;
+    setCommissionAgents((prev) => [...prev, data]);
+  };
+
+  const handleUpdateCommissionAgent = async (phone: string, updates: Partial<CommissionAgent>) => {
+    const { error } = await supabase.from("commission_agents").update(updates).eq("phone", phone);
+    if (error) throw error;
+    setCommissionAgents((prev) => prev.map((a) => (a.phone === phone ? { ...a, ...updates } : a)));
+  };
+
+  const handleDeleteCommissionAgent = async (phone: string) => {
+    const { error } = await supabase.from("commission_agents").delete().eq("phone", phone);
+    if (error) throw error;
+    setCommissionAgents((prev) => prev.filter((a) => a.phone !== phone));
+  };
+
+  const handleAddStaff = async (staffMember: Omit<Staff, "id" | "attendance">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    const newStaff = { ...staffMember, attendance: {}, user_id: currentUser.id };
+    const { data, error } = await supabase.from("staff").insert([newStaff]).select().single();
+    if (error) throw error;
+    setStaff((prev) => [...prev, data]);
+  };
+
+  const handleUpdateStaff = async (id: string, updates: Partial<Staff>) => {
+    const { error } = await supabase.from("staff").update(updates).eq("id", id);
+    if (error) throw error;
+    setStaff((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  };
+
+  const handleDeleteStaff = async (id: string) => {
+    const { error } = await supabase.from("staff").delete().eq("id", id);
+    if (error) throw error;
+    setStaff((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleMarkAttendance = async (staffId: string, date: string, present: boolean, hoursWorked?: number) => {
+    const staffMember = staff.find((s) => s.id === staffId);
+    if (!staffMember) return;
+
+    const rate = staffMember.rate;
+    let wageEarned: number | undefined;
+
+    if (present) {
+      if (staffMember.paymentType === "Daily wage") {
+        wageEarned = rate;
+      } else if (staffMember.paymentType === "Hourly" && hoursWorked) {
+        wageEarned = rate * hoursWorked;
+      }
+    }
+
+    const attendance = {
+      ...staffMember.attendance,
+      [date]: { present, hoursWorked, wageEarned },
+    };
+
+    const { error } = await supabase.from("staff").update({ attendance }).eq("id", staffId);
+    if (error) throw error;
+    setStaff((prev) => prev.map((s) => (s.id === staffId ? { ...s, attendance } : s)));
+  };
+
+  const handleAddSale = async (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+
+    const audit = getAuditFields();
+    const newSale = {
+      ...sale,
+      user_id: currentUser.id,
+      timestamp: new Date().toISOString(),
+      processed_by: audit.processed_by || null,
+      processed_by_name: audit.processed_by_name || null,
+    };
+
+    const { data, error } = await supabase.from("sales").insert([newSale]).select().single();
+    if (error) throw error;
+    setSales((prev) => [data, ...prev]);
+  };
+
+  const handleUpdateSale = async (id: string, updates: Partial<Sale>) => {
+    const { error } = await supabase.from("sales").update(updates).eq("id", id);
+    if (error) throw error;
+    setSales((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+  };
+
+  const handleDeleteSale = async (id: string) => {
+    const { error } = await supabase.from("sales").delete().eq("id", id);
+    if (error) throw error;
+    setSales((prev) => prev.filter((s) => s.id !== id));
+  };
+
+  const handleAddExpense = async (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+
+    const audit = getAuditFields();
+    const newExpense = {
+      ...expense,
+      user_id: currentUser.id,
+      timestamp: new Date().toISOString(),
+      logged_by: audit.logged_by || null,
+      logged_by_name: audit.logged_by_name || null,
+    };
+
+    const { data, error } = await supabase.from("expenses").insert([newExpense]).select().single();
+    if (error) throw error;
+    setExpenses((prev) => [data, ...prev]);
+  };
+
+  const handleUpdateExpense = async (id: string, updates: Partial<Expense>) => {
+    const { error } = await supabase.from("expenses").update(updates).eq("id", id);
+    if (error) throw error;
+    setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
+  };
+
+  const handleDeleteExpense = async (id: string) => {
+    const { error } = await supabase.from("expenses").delete().eq("id", id);
+    if (error) throw error;
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const handleUpdateSettings = async (updates: Partial<StoreSettings>) => {
+    if (!currentUser) throw new Error("Not authenticated");
+
+    const dbUpdates: any = {};
+    if (updates.shopName !== undefined) dbUpdates.shop_name = updates.shopName;
+    if (updates.taxRate !== undefined) dbUpdates.tax_rate = updates.taxRate;
+    if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
+    if (updates.startingBalance !== undefined) dbUpdates.starting_balance = updates.startingBalance;
+    if (updates.quickAddProductIds !== undefined) dbUpdates.quick_add_product_ids = updates.quickAddProductIds;
+    if (updates.theme !== undefined) dbUpdates.theme = updates.theme;
+    if (updates.staffAccounts !== undefined) dbUpdates.staffAccounts = updates.staffAccounts;
+    if (updates.ownerPassword !== undefined) dbUpdates.owner_password = updates.ownerPassword;
+
+    const { error } = await supabase.from("settings").update(dbUpdates).eq("id", currentUser.id);
+    if (error) throw error;
+    setSettings((prev) => ({ ...prev, ...updates }));
+  };
+
+  const handleResetDatabase = async () => {
+    if (!currentUser) throw new Error("Not authenticated");
+    const tables = ["products", "customers", "commission_agents", "staff", "staff_logins", "sales", "expenses", "cheques", "electronic_transactions"];
+    for (const table of tables) {
+      await supabase.from(table).delete().eq("user_id", currentUser.id);
+    }
     setProducts([]);
     setCustomers([]);
+    setCommissionAgents([]);
     setStaff([]);
+    setStaffLogins([]);
     setSales([]);
     setExpenses([]);
-    setElectronicTxs([]);
     setCheques([]);
-    setActualDrawerCash(null);
-
-    setSettings({
-      shopName: "Loading Outlet...",
-      taxRate: 5,
-      currency: "Rs.",
-      startingBalance: 12500,
-      theme: "bauhaus",
-      ownerPassword: "admin",
-      staffAccounts: {
-        cashier: {
-          username: "Cashier Desk",
-          password: "cashier123",
-          isActive: true,
-        },
-        inventory: {
-          username: "Inventory Manager",
-          password: "stock123",
-          isActive: true,
-        },
-      },
-    });
+    setElectronicTxs([]);
   };
 
-  const currency = settings.currency;
-
-  const totalSalesAllTime = useMemo(() => {
-    return sales.reduce((acc, s) => acc + s.totalAmount, 0);
-  }, [sales]);
-
-  const totalExpensesAllTime = useMemo(() => {
-    return expenses.reduce((acc, e) => acc + e.amount, 0);
-  }, [expenses]);
-
-  const cashInHand = useMemo(() => {
-    return settings.startingBalance + totalSalesAllTime - totalExpensesAllTime;
-  }, [settings.startingBalance, totalSalesAllTime, totalExpensesAllTime]);
-
-  const value = {
-    currentUser,
-    authLoading,
-    currentRole,
-    handleRoleChange,
-    operatorRole,
-    handleSwitchOperator,
-    settings,
-    products,
-    customers,
-    staff,
-    sales,
-    expenses,
-    electronicTxs,
-    cheques,
-    actualDrawerCash,
-    currency,
-    cashInHand,
-    totalSalesAllTime,
-    totalExpensesAllTime,
-    showInvoiceForm,
-    setShowInvoiceForm,
-    useSupabaseActive,
-    setUseSupabaseActive,
-    refreshDataFromSupabase,
-    supabaseError,
-    setSupabaseError,
-    handleAddProduct,
-    handleUpdateProductStock,
-    handleDeleteProduct,
-    handleAddCustomer,
-    handleOnboardStaff,
-    handleLogAttendance,
-    handleAddSale,
-    handleUpdateSale,
-    handleAddExpense,
-    handleDeleteExpense,
-    handleUpdateSettings,
-    handleUpdateActualDrawerCash,
-    handleAddElectronicTx,
-    handleDeleteElectronicTx,
-    handleAddCheque,
-    handleDeleteCheque,
-    handleLogout,
-    handleResetDatabase
+  const handleAddCheque = async (cheque: Omit<Cheque, "id" | "timestamp">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    const newCheque = { ...cheque, user_id: currentUser.id, timestamp: new Date().toISOString() };
+    const { data, error } = await supabase.from("cheques").insert([newCheque]).select().single();
+    if (error) throw error;
+    setCheques((prev) => [...prev, data]);
   };
 
-  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+  const handleUpdateCheque = async (id: string, updates: Partial<Cheque>) => {
+    const { error } = await supabase.from("cheques").update(updates).eq("id", id);
+    if (error) throw error;
+    setCheques((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
+  };
+
+  const handleDeleteCheque = async (id: string) => {
+    const { error } = await supabase.from("cheques").delete().eq("id", id);
+    if (error) throw error;
+    setCheques((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const handleAddElectronicTx = async (tx: Omit<ElectronicTx, "id" | "timestamp">) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    const newTx = { ...tx, user_id: currentUser.id, timestamp: new Date().toISOString() };
+    const { data, error } = await supabase.from("electronic_transactions").insert([newTx]).select().single();
+    if (error) throw error;
+    setElectronicTxs((prev) => [...prev, data]);
+  };
+
+  const handleUpdateElectronicTx = async (id: string, updates: Partial<ElectronicTx>) => {
+    const { error } = await supabase.from("electronic_transactions").update(updates).eq("id", id);
+    if (error) throw error;
+    setElectronicTxs((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
+  };
+
+  const handleDeleteElectronicTx = async (id: string) => {
+    const { error } = await supabase.from("electronic_transactions").delete().eq("id", id);
+    if (error) throw error;
+    setElectronicTxs((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const lowStockProducts = products.filter((p) => p.quantity <= p.lowStockLimit);
+  const overstockProducts = products.filter((p) => p.quantity >= p.overstockLimit);
+
+  return (
+    <AppContext.Provider
+      value={{
+        currentUser,
+        staffSession,
+        isLoading,
+        products,
+        customers,
+        commissionAgents,
+        staff,
+        staffLogins,
+        sales,
+        expenses,
+        settings,
+        cheques,
+        electronicTxs,
+        lowStockProducts,
+        overstockProducts,
+        handleLogin,
+        handleLogout,
+        handleStaffLogin,
+        handleStaffLogout,
+        handleSwitchOperator,
+        handleAddProduct,
+        handleUpdateProduct,
+        handleDeleteProduct,
+        handleAddCustomer,
+        handleUpdateCustomer,
+        handleDeleteCustomer,
+        handleAddCommissionAgent,
+        handleUpdateCommissionAgent,
+        handleDeleteCommissionAgent,
+        handleAddStaff,
+        handleUpdateStaff,
+        handleDeleteStaff,
+        handleMarkAttendance,
+        handleAddSale,
+        handleUpdateSale,
+        handleDeleteSale,
+        handleAddExpense,
+        handleUpdateExpense,
+        handleDeleteExpense,
+        handleUpdateSettings,
+        handleResetDatabase,
+        handleAddCheque,
+        handleUpdateCheque,
+        handleDeleteCheque,
+        handleAddElectronicTx,
+        handleUpdateElectronicTx,
+        handleDeleteElectronicTx,
+      }}
+    >
+      {children}
+    </AppContext.Provider>
+  );
 }
-
-const defaultContextValue: AppContextType = {
-  currentUser: null,
-  authLoading: true,
-  currentRole: "admin",
-  handleRoleChange: () => {},
-  operatorRole: "admin",
-  handleSwitchOperator: async () => ({ success: false, message: "Not implemented" }),
-  settings: {
-    shopName: "Urban Mart",
-    taxRate: 5,
-    currency: "$",
-    startingBalance: 12500,
-    theme: "bauhaus",
-  },
-  products: [],
-  customers: [],
-  staff: [],
-  sales: [],
-  expenses: [],
-  electronicTxs: [],
-  cheques: [],
-  actualDrawerCash: null,
-  currency: "$",
-  cashInHand: 12500,
-  totalSalesAllTime: 0,
-  totalExpensesAllTime: 0,
-  showInvoiceForm: false,
-  setShowInvoiceForm: () => {},
-
-  useSupabaseActive: false,
-  setUseSupabaseActive: () => {},
-  refreshDataFromSupabase: async () => {},
-
-  supabaseError: null,
-  setSupabaseError: () => {},
-
-  handleAddProduct: async () => {},
-  handleUpdateProductStock: async () => {},
-  handleDeleteProduct: async () => {},
-  handleAddCustomer: async () => {},
-  handleOnboardStaff: async () => {},
-  handleLogAttendance: async () => {},
-  handleAddSale: async () => {},
-  handleUpdateSale: async () => {},
-  handleAddExpense: async () => {},
-  handleDeleteExpense: async () => {},
-  handleUpdateSettings: async () => {},
-  handleUpdateActualDrawerCash: async () => {},
-  handleAddElectronicTx: async () => {},
-  handleDeleteElectronicTx: async () => {},
-  handleAddCheque: async () => {},
-  handleDeleteCheque: async () => {},
-  handleLogout: async () => {},
-  handleResetDatabase: async () => {},
-};
 
 export function useApp() {
   const context = useContext(AppContext);
-  if (context === undefined) {
-    return defaultContextValue;
-  }
+  if (!context) throw new Error("useApp must be used within AppProvider");
   return context;
 }
