@@ -10,14 +10,18 @@ export default function SettingsPageRoute() {
   const context = useApp();
 
   return (
-    <SettingsPage 
+    <SettingsPage
       settings={context.settings}
       onUpdateSettings={context.handleUpdateSettings}
       onResetDatabase={context.handleResetDatabase}
       products={context.products}
-      staff={context.staff}           // ← ADDED: pass staff array from context
-      operatorRole={context.operatorRole}
-      currentUser={context.currentUser}  // ← ADDED: pass current user for DB queries
+      staff={context.staff}
+      staffLogins={context.staffLogins}
+      currentUser={context.currentUser}
+      onRefresh={() => {
+        // Force re-fetch by reloading or you can expose a fetchAllData function
+        window.location.reload();
+      }}
     />
   );
 }
