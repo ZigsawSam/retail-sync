@@ -38,14 +38,16 @@ export interface Staff {
   attendance: Record<string, { present: boolean; hoursWorked?: number; wageEarned?: number }>;
 }
 
-// NEW: Staff login record (lives in DB, has history)
+// Staff login record (lives in DB, has history)
+// Links to the Staff table via staff_id
 export interface StaffLogin {
   id: string;
-  userId: string;           // shop owner
+  userId: string; // shop owner (Supabase auth user)
+  staffId: string; // links to Staff.id
   name: string;
   role: "cashier" | "inventory_manager";
   email: string | null;
-  password: string;         // migrate to hashed later
+  password: string; // migrate to hashed later
   isActive: boolean;
   createdAt: string;
   terminatedAt: string | null;
@@ -79,8 +81,8 @@ export interface Sale {
   timestamp: string;
   clearanceStatus?: "Pending" | "Cleared";
   discountAmount?: number;
-  processedBy?: string;       // staff_login.id
-  processedByName?: string;   // denormalized for display
+  processedBy?: string; // staff_login.id
+  processedByName?: string; // denormalized for display
 }
 
 export interface Expense {
@@ -90,8 +92,8 @@ export interface Expense {
   description: string;
   timestamp: string;
   paymentMethod?: string;
-  loggedBy?: string;          // staff_login.id
-  loggedByName?: string;      // denormalized for display
+  loggedBy?: string; // staff_login.id
+  loggedByName?: string; // denormalized for display
 }
 
 export interface StaffAccount {
