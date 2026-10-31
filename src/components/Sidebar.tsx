@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { 
   LayoutDashboard, 
   ShoppingCart, 
@@ -25,9 +25,6 @@ interface SidebarProps {
   currency?: string;
   onLogout?: () => void;
   currentRole: ERPRole;
-  onChangeRole: (role: ERPRole) => void;
-  operatorRole: ERPRole;
-  handleSwitchOperator: (role: ERPRole, password?: string, email?: string) => Promise<{ success: boolean; message: string }>;
 }
 
 export default function Sidebar({ 
@@ -38,37 +35,7 @@ export default function Sidebar({
   currency = "$",
   onLogout,
   currentRole,
-  onChangeRole,
-  operatorRole,
-  handleSwitchOperator
-}: SidebarProps) {
-  const [isSwitchModalOpen, setIsSwitchModalOpen] = useState(false);
-  const [selectedSwitchRole, setSelectedSwitchRole] = useState<ERPRole>("admin");
-  const [switchEmail, setSwitchEmail] = useState("");
-  const [switchPassword, setSwitchPassword] = useState("");
-  const [switchError, setSwitchError] = useState("");
-
-  const handleOpenSwitchModal = (role: ERPRole) => {
-    setSelectedSwitchRole(role);
-    setSwitchEmail("");
-    setSwitchPassword("");
-    setSwitchError("");
-    setIsSwitchModalOpen(true);
-  };
-
-  const handleExecuteSwitch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSwitchError("");
-    const res = await handleSwitchOperator(selectedSwitchRole, switchPassword, switchEmail);
-    if (res.success) {
-      setIsSwitchModalOpen(false);
-      setSwitchEmail("");
-      setSwitchPassword("");
-    } else {
-      setSwitchError(res.message);
-    }
-  };
-
+ }: SidebarProps) {
   // Roles allowed to view each menu item (kept in sync with RoleGuard via ROUTE_ROLES)
   const menuItems = [
     { id: "dashboard", label: "DASHBOARD", icon: LayoutDashboard, roles: ROUTE_ROLES.dashboard },
@@ -101,187 +68,19 @@ export default function Sidebar({
         </div>
       </div>
 
-      {/* Interactive ERP Role Switcher Console */}
+      {/* Role is bound to the authenticated Supabase identity; no client-side impersonation. */}
       <div className="mx-4 mt-4 p-3 bg-white border-2 border-black rounded-none shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] shrink-0">
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[9px] font-black font-mono uppercase text-zinc-500 tracking-wider flex items-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-[#0055A5]" />
-            <span>OPERATOR SESSION</span>
+        <p className="text-[9px] font-black font-mono uppercase text-zinc-500 tracking-wider flex items-center gap-1.5 mb-2">
+          <ShieldCheck className="w-3.5 h-3.5 text-[#0055A5]" />
+          AUTHENTICATED ROLE
+        </p>
+        <div className="bg-zinc-50 p-2 border border-dashed border-black/30">
+          <p className="text-xs font-black text-black font-mono uppercase tracking-tight">
+            {currentRole === "admin" ? "SHOP OWNER" : currentRole === "cashier" ? "CASHIER" : "INVENTORY MANAGER"}
           </p>
-          {operatorRole === "admin" ? (
-            <button 
-              onClick={() => handleOpenSwitchModal("cashier")}
-              title="Lock Terminal / Switch to Staff"
-              className="text-zinc-500 hover:text-black cursor-pointer transition-colors"
-            >
-              <Lock className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <button 
-              onClick={() => handleOpenSwitchModal("admin")}
-              title="Unlock Owner Controls"
-              className="text-[#D63031] hover:text-[#b82021] flex items-center gap-1 font-mono text-[8px] font-black uppercase cursor-pointer"
-            >
-              <Unlock className="w-3 h-3 animate-bounce" />
-              <span>Unlock Admin</span>
-            </button>
-          )}
+          <p className="text-[9px] text-zinc-500 font-mono mt-1">Role comes from your signed-in account</p>
         </div>
-
-        {/* If session is locked as cashier or stock manager, hide other roles entirely */}
-        {operatorRole !== "admin" ? (
-          <div className="flex items-center justify-between bg-zinc-50 p-2 border border-dashed border-black/30">
-            <div>
-              <p className="text-[9px] font-black font-mono uppercase text-zinc-400">ACTIVE OPERATOR</p>
-              <p className="text-xs font-black text-black font-mono uppercase tracking-tight">
-                {operatorRole === "cashier" ? "CASHIER ROLE" : "STOCK MANAGER"}
-              </p>
-            </div>
-            <button
-              onClick={() => handleOpenSwitchModal("admin")}
-              className="px-2 py-1 bg-black text-white hover:bg-zinc-800 text-[8px] font-black uppercase tracking-wider border border-black cursor-pointer shadow-[1px_1px_0px_0px_rgba(0,0,0,1)]"
-            >
-              Switch User
-            </button>
-          </div>
-        ) : (
-          <div className="grid grid-cols-3 gap-1">
-            {[
-              { id: 'admin', label: 'ADMIN', color: '#D63031' },
-              { id: 'cashier', label: 'CASHIER', color: '#FFC300' },
-              { id: 'inventory_manager', label: 'STOCK', color: '#0055A5' },
-            ].map((r) => {
-              const isSelected = currentRole === r.id;
-              return (
-                <button
-                  key={r.id}
-                  onClick={() => onChangeRole(r.id as ERPRole)}
-                  style={{ 
-                    backgroundColor: isSelected ? r.color : '#FFFFFF', 
-                    color: isSelected ? (r.id === 'cashier' ? '#000000' : '#FFFFFF') : '#000000' 
-                  }}
-                  className={`py-1 text-[8px] font-black border border-black rounded-none transition-all cursor-pointer text-center uppercase tracking-tighter ${
-                    isSelected 
-                      ? 'shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] -translate-y-0.5' 
-                      : 'hover:bg-zinc-100'
-                  }`}
-                >
-                  {r.label}
-                </button>
-              );
-            })}
-          </div>
-        )}
       </div>
-
-      {/* Operator Switch Authenticator Modal */}
-      {isSwitchModalOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-[#FAF8F5] border-4 border-black p-6 w-full max-w-sm rounded-none shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] animate-fadeIn text-black">
-            <div className="border-b-2 border-black pb-3 mb-4 flex items-center gap-2">
-              <Lock className="w-5 h-5 text-black" />
-              <h3 className="font-black uppercase text-sm tracking-tight">OPERATOR AUTHENTICATOR</h3>
-            </div>
-
-             <form onSubmit={handleExecuteSwitch} className="space-y-4">
-              {operatorRole === "admin" ? (
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5">
-                    Select Destination Operator
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "admin", label: "ADMIN / OWNER" },
-                      { id: "cashier", label: "CASHIER" },
-                      { id: "inventory_manager", label: "STOCK ROOM" }
-                    ].map((roleOpt) => {
-                      const isSel = selectedSwitchRole === roleOpt.id;
-                      return (
-                        <button
-                          key={roleOpt.id}
-                          type="button"
-                          onClick={() => setSelectedSwitchRole(roleOpt.id as ERPRole)}
-                          className={`py-2 text-[9px] font-black border-2 border-black rounded-none text-center uppercase tracking-tighter transition-all cursor-pointer ${
-                            isSel ? "bg-[#FFC300] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] -translate-y-0.5" : "bg-white text-zinc-700 hover:bg-zinc-50"
-                          }`}
-                        >
-                          {roleOpt.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div className="bg-zinc-100 p-2.5 border border-dashed border-black/30 font-mono text-[10px] font-black uppercase">
-                  Destination Operator: <span className="text-[#D63031]">ADMIN / OWNER</span>
-                  <p className="text-[9px] text-zinc-500 font-normal mt-1 lowercase leading-tight">
-                    Enter the Admin/Owner password below to authorize and unlock full dashboard controls.
-                  </p>
-                </div>
-              )}
-
-              {(selectedSwitchRole === "cashier" || selectedSwitchRole === "inventory_manager") && (
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5">
-                    Operator Email / Login
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="Enter onboarded email..."
-                    value={switchEmail}
-                    onChange={(e) => setSwitchEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border-2 border-black text-black rounded-none text-xs font-bold focus:outline-none font-mono mb-3"
-                  />
-                </div>
-              )}
-
-              <div>
-                <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5">
-                  Operator Password / PIN
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder={
-                    selectedSwitchRole === "admin" 
-                      ? "Default is 'admin'" 
-                      : selectedSwitchRole === "cashier" 
-                        ? "Default is 'cashier123'" 
-                        : "Default is 'stock123'"
-                  }
-                  value={switchPassword}
-                  onChange={(e) => setSwitchPassword(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border-2 border-black text-black rounded-none text-xs font-bold focus:outline-none font-mono"
-                  autoFocus
-                />
-              </div>
-
-              {switchError && (
-                <div className="p-2.5 bg-red-50 border-2 border-[#D63031] text-[#D63031] text-[10px] font-mono font-bold uppercase leading-normal">
-                  ⚠️ {switchError}
-                </div>
-              )}
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSwitchModalOpen(false)}
-                  className="flex-1 py-2 bg-white hover:bg-zinc-100 border-2 border-black text-black text-xs font-black uppercase transition-all cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-2 bg-black hover:bg-zinc-800 text-[#FFC300] text-xs font-black uppercase transition-all cursor-pointer shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                >
-                  Authorize Switch
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Navigation List */}
       <nav className="flex-1 p-4 space-y-3 overflow-y-auto bg-[#F5F2EB]">
@@ -331,14 +130,14 @@ export default function Sidebar({
 
       {/* Footer / Adaptive Metric Widget */}
       <div className="p-4 border-t-4 border-black bg-white shrink-0">
-        {currentRole === "inventory_manager" ? (
+        {currentRole === "inventory_manager" || currentRole === "cashier" ? (
           <div className="bg-[#0055A5] text-white border-2 border-black p-3 rounded-none mb-3 text-left shadow-[3px_3px_0px_0px_#000000]">
             <div className="flex items-center justify-between mb-1">
               <span className="text-[8px] text-[#FFC300] font-bold uppercase tracking-wider font-mono">STOCKROOM STATION</span>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-black animate-pulse"></span>
             </div>
             <p className="text-[11px] font-mono font-bold leading-normal text-white">
-              Secured Warehouse Channels Active
+              {currentRole === "inventory_manager" ? "Inventory workspace active" : "Sales terminal active"}
             </p>
           </div>
         ) : (
