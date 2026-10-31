@@ -133,7 +133,7 @@ export default function Sidebar({
         {currentRole === "inventory_manager" || currentRole === "cashier" ? (
           <div className="bg-[#0055A5] text-white border-2 border-black p-3 rounded-none mb-3 text-left shadow-[3px_3px_0px_0px_#000000]">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[8px] text-[#FFC300] font-bold uppercase tracking-wider font-mono">STOCKROOM STATION</span>
+              <span className="text-[8px] text-[#FFC300] font-bold uppercase tracking-wider font-mono">{currentRole === "inventory_manager" ? "STOCKROOM STATION" : "CASHIER TERMINAL"}</span>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 border border-black animate-pulse"></span>
             </div>
             <p className="text-[11px] font-mono font-bold leading-normal text-white">
