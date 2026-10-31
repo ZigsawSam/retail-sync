@@ -107,7 +107,6 @@ export default function Dashboard({
         sales={sales}
         products={products}
         customers={customers}
-        settings={settings}
         setActiveTab={setActiveTab}
         currency={settings.currency}
       />
