@@ -63,7 +63,7 @@ GRANT EXECUTE ON FUNCTION public.current_staff_owner_id() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.current_staff_role() TO authenticated;
 
 -- Products: both staff roles can read. Inventory managers can create/update;
--- no staff role can delete products.
+-- no staff role can insert or delete products; inventory managers can change quantity only.
 DROP POLICY IF EXISTS staff_products_read_shop ON public.products;
 CREATE POLICY staff_products_read_shop
   ON public.products FOR SELECT TO authenticated
@@ -73,14 +73,8 @@ CREATE POLICY staff_products_read_shop
     AND public.current_staff_role() IN ('cashier', 'inventory_manager')
   );
 
+-- Inventory managers cannot create catalog products; catalog administration remains owner-only.
 DROP POLICY IF EXISTS staff_inventory_products_insert ON public.products;
-CREATE POLICY staff_inventory_products_insert
-  ON public.products FOR INSERT TO authenticated
-  WITH CHECK (
-    public.current_staff_owner_id() IS NOT NULL
-    AND public.current_staff_owner_id()::text = "userId"
-    AND public.current_staff_role() = 'inventory_manager'
-  );
 
 DROP POLICY IF EXISTS staff_inventory_products_update ON public.products;
 CREATE POLICY staff_inventory_products_update
@@ -95,6 +89,34 @@ CREATE POLICY staff_inventory_products_update
     AND public.current_staff_owner_id()::text = "userId"
     AND public.current_staff_role() = 'inventory_manager'
   );
+
+-- Inventory managers may change only the stock quantity column, never prices,
+-- ownership, identifiers, categories, or other product metadata.
+CREATE OR REPLACE FUNCTION public.enforce_staff_product_update_columns()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = pg_catalog, public
+AS $function$
+BEGIN
+  IF public.current_staff_role() = 'inventory_manager'
+     AND public.current_staff_owner_id()::text = OLD."userId" THEN
+    IF (to_jsonb(NEW) - 'quantity') IS DISTINCT FROM (to_jsonb(OLD) - 'quantity') THEN
+      RAISE EXCEPTION 'Inventory managers may update stock quantity only';
+    END IF;
+    IF NEW.quantity < 0 THEN
+      RAISE EXCEPTION 'Stock quantity cannot be negative';
+    END IF;
+  END IF;
+  RETURN NEW;
+END
+$function$;
+
+DROP TRIGGER IF EXISTS enforce_staff_product_update_columns ON public.products;
+CREATE TRIGGER enforce_staff_product_update_columns
+  BEFORE UPDATE ON public.products
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_staff_product_update_columns();
 
 -- Customers: both roles can read; cashiers can create records. Neither staff
 -- role can update/delete existing customer records in this initial policy set.
