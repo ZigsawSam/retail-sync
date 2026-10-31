@@ -77,6 +77,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     router.push(`/${tab}`);
   };
 
+  // Invitation and recovery links must be reachable before an app session exists.
+  if (pathname === "/auth/reset-password") {
+    return <>{children}</>;
+  }
+
   const activeTheme = settings.theme || "bauhaus";
   const themeClassName = `theme-${activeTheme}`;
 
