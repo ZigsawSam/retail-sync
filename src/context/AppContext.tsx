@@ -631,7 +631,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleRoleChange = (role: ERPRole) => {
     if (!staffSession) setSelectedRole(role);
   };
-  const cashInHand = Number(settings.startingBalance || 0);
+  const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
   const currency = settings.currency || "Rs";
 
   const lowStockProducts = products.filter((p) => p.quantity <= p.lowStockLimit);
