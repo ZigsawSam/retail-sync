@@ -6,7 +6,15 @@ export async function POST(request: NextRequest) {
     const { agentName, agentPhone, amount, shopName } =
       await request.json();
 
-    const message = `Dear ${agentName}, you have been credited with a commission of ₹${amount} from ${shopName}. Thank you for your partnership!`;
+    if (typeof agentName !== "string" || typeof agentPhone !== "string" || typeof shopName !== "string") {
+      return NextResponse.json({ success: false, error: "Invalid notification preview details." }, { status: 400 });
+    }
+    const numericAmount = Number(amount);
+    if (!Number.isFinite(numericAmount) || numericAmount < 0) {
+      return NextResponse.json({ success: false, error: "Commission amount must be a non-negative number." }, { status: 400 });
+    }
+
+    const message = `Dear ${agentName}, you have a commission of ₹${numericAmount.toFixed(2)} from ${shopName}. This is a preview; no SMS has been sent.`;
 
     const sms = {
       id: crypto.randomUUID(),
@@ -14,7 +22,7 @@ export async function POST(request: NextRequest) {
       agentPhone,
       message,
       timestamp: new Date().toISOString(),
-      status: "Sent Successfully",
+      status: "Preview only — not sent",
     };
 
     smsLog.push(sms);
