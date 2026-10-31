@@ -22,8 +22,24 @@ BEGIN
       RAISE EXCEPTION 'Expected public.%."userId" TEXT column is missing', required_table;
     END IF;
   END LOOP;
+
+  IF EXISTS (
+    SELECT 1
+    FROM (VALUES
+      ('id'), ('name'), ('category'), ('quantity'), ('barcode'),
+      ('lowStockLimit'), ('overstockLimit'), ('sellingPrice')
+    ) AS required(column_name)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM information_schema.columns c
+      WHERE c.table_schema = 'public'
+        AND c.table_name = 'products'
+        AND c.column_name = required.column_name
+    )
+  ) THEN
+    RAISE EXCEPTION 'The deployed products schema does not match the expected camelCase fields; inspect before applying staff RLS';
+  END IF;
 END
-$$;
+$;
 
 -- Harden the previously introduced identity resolvers. They return only the
 -- tenant and role associated with the caller's own active Auth identity.
