@@ -416,8 +416,12 @@ export default function SalesPage({
     setShowCommissionPrompt(false);
     if (!finalizedSale) return;
 
+    // Persist the financial transaction before attempting any optional notification.
+    // SMS availability must never determine whether a sale is recorded.
+    onAddSale(finalizedSale);
+    setShowInvoiceDownloadOptions(true);
+
     if (generate && finalizedSale.commissionAgent) {
-      // Call simulated SMS route on Express server
       try {
         const response = await fetch("/api/sms/send", {
           method: "POST",
@@ -426,36 +430,27 @@ export default function SalesPage({
             agentName: finalizedSale.commissionAgent.name,
             agentPhone: finalizedSale.commissionAgent.phone,
             amount: finalizedSale.commissionAgent.commissionAmount.toFixed(2),
-            shopName: shopName
+            shopName
           })
         });
         const data = await response.json();
-        
-        if (data.success) {
-          setSmsSentDetails(data.sms);
-          setSimulatedSmsText(data.sms.message);
-          finalizedSale.commissionAgent.notified = true;
-          setShowSmsSimulator(true);
+        if (!response.ok || !data.success) {
+          throw new Error(data.error || "Notification preview unavailable");
         }
+        setSmsSentDetails(data.sms);
+        setSimulatedSmsText(data.sms.message);
+        setShowSmsSimulator(true);
       } catch (err) {
-        console.error("Failed to send simulated SMS API call:", err);
-        // Fallback simulate client-side
-        const msg = `Dear ${finalizedSale.commissionAgent.name}, you have been credited with a commission of $${finalizedSale.commissionAgent.commissionAmount.toFixed(2)} from ${shopName}. Thank you!`;
+        console.error("Commission notification preview failed:", err);
+        const msg = `Commission notice preview for ${finalizedSale.commissionAgent.name}: ${currency}${finalizedSale.commissionAgent.commissionAmount.toFixed(2)} from ${shopName}. No SMS was sent.`;
         setSimulatedSmsText(msg);
         setShowSmsSimulator(true);
       }
-    } else {
-      // Add to logs and open download options
-      onAddSale(finalizedSale);
-      setShowInvoiceDownloadOptions(true);
     }
   };
 
   const closeSmsSimulator = () => {
     setShowSmsSimulator(false);
-    if (finalizedSale) {
-      onAddSale(finalizedSale);
-    }
     setShowInvoiceDownloadOptions(true);
   };
 
