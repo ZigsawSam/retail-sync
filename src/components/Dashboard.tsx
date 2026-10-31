@@ -109,11 +109,7 @@ export default function Dashboard({
         customers={customers}
         settings={settings}
         setActiveTab={setActiveTab}
-        onUpdateActualDrawerCash={onUpdateActualDrawerCash}
-        actualDrawerCash={actualDrawerCash}
         currency={settings.currency}
-        expenses={expenses}
-        onAddExpense={onAddExpense}
       />
     );
   }
