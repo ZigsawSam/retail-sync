@@ -6,7 +6,7 @@ export const ROUTE_ROLES: Record<string, ERPRole[]> = {
   dashboard: ["admin", "inventory_manager", "cashier"],
   sales: ["admin", "cashier"],
   people: ["admin"],
-  operations: ["admin", "inventory_manager"],
+  operations: ["admin"],
   insights: ["admin", "cashier"],
   ai: ["admin"],
   settings: ["admin"],
