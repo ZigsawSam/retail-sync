@@ -57,6 +57,9 @@ interface AppContextType {
   settings: StoreSettings;
   cheques: Cheque[];
   electronicTxs: ElectronicTx[];
+  actualDrawerCash: number | null;
+  showInvoiceForm: boolean;
+  setShowInvoiceForm: (value: boolean) => void;
 
   // Computed
   lowStockProducts: Product[];
@@ -71,6 +74,7 @@ interface AppContextType {
 
   handleAddProduct: (product: Omit<Product, "id">) => Promise<void>;
   handleUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  handleUpdateProductStock: (id: string, quantity: number) => Promise<void>;
   handleDeleteProduct: (id: string) => Promise<void>;
 
   handleAddCustomer: (customer: Omit<Customer, "id" | "points" | "tier" | "totalSpent">) => Promise<void>;
@@ -104,6 +108,7 @@ interface AppContextType {
   handleAddElectronicTx: (tx: Omit<ElectronicTx, "id" | "timestamp">) => Promise<void>;
   handleUpdateElectronicTx: (id: string, updates: Partial<ElectronicTx>) => Promise<void>;
   handleDeleteElectronicTx: (id: string) => Promise<void>;
+  handleUpdateActualDrawerCash: (amount: number | null) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -130,6 +135,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [electronicTxs, setElectronicTxs] = useState<ElectronicTx[]>([]);
+  const [actualDrawerCash, setActualDrawerCash] = useState<number | null>(null);
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
   // Load staff session from sessionStorage on mount
   useEffect(() => {
@@ -388,6 +395,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from("products").update(updates).eq("id", id);
     if (error) throw error;
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+  };
+
+  const handleUpdateProductStock = async (id: string, quantity: number) => {
+    if (!Number.isFinite(quantity) || quantity < 0) throw new Error("Stock quantity must be a non-negative number.");
+    await handleUpdateProduct(id, { quantity });
   };
 
   const handleDeleteProduct = async (id: string) => {
@@ -649,6 +661,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         settings,
         cheques,
         electronicTxs,
+        actualDrawerCash,
+        showInvoiceForm,
+        setShowInvoiceForm,
         lowStockProducts,
         overstockProducts,
         handleLogin,
@@ -658,6 +673,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleSwitchOperator,
         handleAddProduct,
         handleUpdateProduct,
+        handleUpdateProductStock,
         handleDeleteProduct,
         handleAddCustomer,
         handleUpdateCustomer,
@@ -680,6 +696,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleAddCheque,
         handleUpdateCheque,
         handleDeleteCheque,
+        handleUpdateActualDrawerCash: async (amount: number | null) => { setActualDrawerCash(amount); },
         handleAddElectronicTx,
         handleUpdateElectronicTx,
         handleDeleteElectronicTx,
