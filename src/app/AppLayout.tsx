@@ -13,10 +13,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     currentUser,
     authLoading,
     currentRole,
-    handleRoleChange,
-    operatorRole,
-    handleSwitchOperator,
-    settings,
+     settings,
     cashInHand,
     currency,
     handleLogout,
@@ -94,10 +91,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         currency={currency}
         onLogout={handleLogout}
         currentRole={currentRole}
-        onChangeRole={handleRoleChange}
-        operatorRole={operatorRole}
-        handleSwitchOperator={handleSwitchOperator}
-      />
+       />
 
       {/* Dynamic Viewport */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
