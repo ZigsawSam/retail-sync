@@ -25,7 +25,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   } = useApp();
 
   const [errorBannerExpanded, setErrorBannerExpanded] = useState(false);
-  const [sqlCopied, setSqlCopied] = useState(false);
 
   const pathname = usePathname();
   const router = useRouter();
@@ -142,45 +141,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   <ul className="list-disc pl-4 mt-1.5 space-y-1.5 text-[11px] text-zinc-700">
                     {supabaseError.troubleshootingSteps.map((step, idx) => (
                       <li key={idx} className="leading-relaxed">
-                        {step.startsWith("ALTER TABLE") || step.includes("ROW LEVEL SECURITY") || step.includes("DISABLE ROW LEVEL SECURITY") ? (
-                          <div className="mt-2 mb-2">
-                            <span className="text-[10px] font-black text-black uppercase block mb-1">
-                              Paste and run this query in your Supabase SQL Editor:
-                            </span>
-                            <div className="relative">
-                              <pre className="block bg-zinc-100 p-2.5 border-2 border-black text-[10px] text-black font-mono overflow-x-auto whitespace-pre select-all shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] font-bold">
-                                {`ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE customers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE staff DISABLE ROW LEVEL SECURITY;
-ALTER TABLE sales DISABLE ROW LEVEL SECURITY;
-ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
-ALTER TABLE "electronicTxs" DISABLE ROW LEVEL SECURITY;
-ALTER TABLE cheques DISABLE ROW LEVEL SECURITY;
-ALTER TABLE "actualDrawerCash" DISABLE ROW LEVEL SECURITY;`}
-                              </pre>
-                              <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(`ALTER TABLE settings DISABLE ROW LEVEL SECURITY;
-ALTER TABLE products DISABLE ROW LEVEL SECURITY;
-ALTER TABLE customers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE staff DISABLE ROW LEVEL SECURITY;
-ALTER TABLE sales DISABLE ROW LEVEL SECURITY;
-ALTER TABLE expenses DISABLE ROW LEVEL SECURITY;
-ALTER TABLE "electronicTxs" DISABLE ROW LEVEL SECURITY;
-ALTER TABLE cheques DISABLE ROW LEVEL SECURITY;
-ALTER TABLE "actualDrawerCash" DISABLE ROW LEVEL SECURITY;`);
-                                  setSqlCopied(true);
-                                  setTimeout(() => setSqlCopied(false), 2000);
-                                }}
-                                className={`absolute right-2 top-2 px-2 py-1 border border-black text-[9px] font-bold uppercase cursor-pointer shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] transition-all ${
-                                  sqlCopied ? "bg-emerald-400 text-black font-black" : "bg-white hover:bg-zinc-100 text-zinc-800"
-                                }`}
-                              >
-                                {sqlCopied ? "✓ Copied!" : "Copy SQL"}
-                              </button>
-                            </div>
-                          </div>
+                        {step.includes("ROW LEVEL SECURITY") || step.includes("DISABLE ROW LEVEL SECURITY") ? (
+                          <span className="font-semibold text-amber-800">Do not disable Row-Level Security. Restore access with tenant-scoped policies and verify permissions for this authenticated user. Ask an administrator to review the Supabase schema and policies before applying any SQL.</span>
                         ) : (
                           step
                         )}
