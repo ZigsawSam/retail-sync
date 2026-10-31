@@ -237,13 +237,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser || !tenantOwnerId) return;
     const userId = tenantOwnerId;
 
-    const productSelect = staffSession?.role === "cashier"
-      ? "id,name,category,sellingPrice,quantity,barcode,lowStockLimit,overstockLimit"
-      : staffSession?.role === "inventory_manager"
-        ? "id,name,category,quantity,barcode,lowStockLimit,overstockLimit"
-        : "*";
-    const { data: productsData, error: productsError } = await supabase
-      .from("products").select(productSelect).eq("userId", userId);
+    let productsData: any[] | null = null;
+    let productsError: any = null;
+    if (staffSession) {
+      const { data, error } = await supabase.rpc("staff_list_products");
+      productsData = (data || []) as any[];
+      productsError = error;
+    } else {
+      const { data, error } = await supabase.from("products").select("*").eq("userId", userId);
+      productsData = data;
+      productsError = error;
+    }
     if (productsError) setSupabaseError(productsError);
     setProducts(productsData || []);
 
