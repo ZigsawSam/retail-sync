@@ -278,7 +278,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isActive: l.is_active,
         createdAt: l.created_at,
         terminatedAt: l.terminated_at,
-    }));
+    })));
 
     const { data: salesData, error: salesError } = await supabase
       .from("sales").select("*").eq("userId", userId).order("timestamp", { ascending: false });
