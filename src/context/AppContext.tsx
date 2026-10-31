@@ -265,7 +265,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setStaff(staffData || []);
 
     const { data: loginsData, error: loginsError } = await supabase
-      .from("staff_logins").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+      .from("staff_logins").select("id,user_id,staff_id,auth_user_id,name,role,email,is_active,created_at,terminated_at").eq("user_id", userId).order("created_at", { ascending: false });
     if (loginsError) setSupabaseError(loginsError);
     setStaffLogins((loginsData || []).map((l: any) => ({
         id: l.id,
