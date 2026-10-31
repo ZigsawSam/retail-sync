@@ -232,14 +232,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // This legacy table is not present in the supplied deployed schema inventory.
     // Keep it isolated; its failure must not block core retail data.
-    const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("user_id", userId);
+    const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("userId", userId);
     if (agentsData) setCommissionAgents(agentsData);
 
     const { data: staffData } = await supabase.from("staff").select("*").eq("userId", userId);
     if (staffData) setStaff(staffData);
 
     const { data: loginsData, error: loginsError } = await supabase
-      .from("staff_logins").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+      .from("staff_logins").select("*").eq("userId", userId).order("created_at", { ascending: false });
     if (loginsError) setSupabaseError(loginsError);
     if (loginsData) {
       setStaffLogins(loginsData.map((l: any) => ({
@@ -352,7 +352,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser) throw new Error("Not authenticated");
     const { data, error } = await supabase
       .from("products")
-      .insert([{ ...product, user_id: currentUser.id }])
+      .insert([{ ...product, userId: tenantOwnerId }])
       .select()
       .single();
     if (error) throw error;
@@ -378,7 +378,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleAddCustomer = async (customer: Omit<Customer, "id" | "points" | "tier" | "totalSpent">) => {
     if (!currentUser) throw new Error("Not authenticated");
-    const newCustomer = { ...customer, points: 0, tier: "Bronze" as const, totalSpent: 0, user_id: currentUser.id };
+    const newCustomer = { ...customer, points: 0, tier: "Bronze" as const, totalSpent: 0, userId: tenantOwnerId };
     const { data, error } = await supabase.from("customers").insert([newCustomer]).select().single();
     if (error) throw error;
     setCustomers((prev) => [...prev, data]);
@@ -398,7 +398,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleAddCommissionAgent = async (agent: Omit<CommissionAgent, "totalEarnings">) => {
     if (!currentUser) throw new Error("Not authenticated");
-    const newAgent = { ...agent, totalEarnings: 0, user_id: currentUser.id };
+    const newAgent = { ...agent, totalEarnings: 0, userId: tenantOwnerId };
     const { data, error } = await supabase.from("commission_agents").insert([newAgent]).select().single();
     if (error) throw error;
     setCommissionAgents((prev) => [...prev, data]);
@@ -418,7 +418,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleAddStaff = async (staffMember: Omit<Staff, "id" | "attendance">) => {
     if (!currentUser) throw new Error("Not authenticated");
-    const newStaff = { ...staffMember, attendance: {}, user_id: currentUser.id };
+    const newStaff = { ...staffMember, attendance: {}, userId: tenantOwnerId };
     const { data, error } = await supabase.from("staff").insert([newStaff]).select().single();
     if (error) throw error;
     setStaff((prev) => [...prev, data]);
@@ -467,7 +467,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const audit = getAuditFields();
     const newSale = {
       ...sale,
-      user_id: currentUser.id,
+      userId: tenantOwnerId,
       timestamp: new Date().toISOString(),
       processed_by: audit.processed_by || null,
       processed_by_name: audit.processed_by_name || null,
@@ -491,12 +491,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleAddExpense = async (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName">) => {
-    if (!currentUser) throw new Error("Not authenticated");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot create expenses.");
 
     const audit = getAuditFields();
     const newExpense = {
       ...expense,
-      user_id: currentUser.id,
+      userId: tenantOwnerId,
       timestamp: new Date().toISOString(),
       logged_by: audit.logged_by || null,
       logged_by_name: audit.logged_by_name || null,
@@ -508,40 +508,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateExpense = async (id: string, updates: Partial<Expense>) => {
+    if (staffSession) throw new Error("Staff accounts cannot update expenses.");
     const { error } = await supabase.from("expenses").update(updates).eq("id", id);
     if (error) throw error;
     setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
   };
 
   const handleDeleteExpense = async (id: string) => {
+    if (staffSession) throw new Error("Staff accounts cannot delete expenses.");
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) throw error;
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
   const handleUpdateSettings = async (updates: Partial<StoreSettings>) => {
-    if (!currentUser) throw new Error("Not authenticated");
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can change store settings.");
 
     const dbUpdates: any = {};
-    if (updates.shopName !== undefined) dbUpdates.shop_name = updates.shopName;
-    if (updates.taxRate !== undefined) dbUpdates.tax_rate = updates.taxRate;
+    if (updates.shopName !== undefined) dbUpdates.shopName = updates.shopName;
+    if (updates.taxRate !== undefined) dbUpdates.taxRate = updates.taxRate;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
-    if (updates.startingBalance !== undefined) dbUpdates.starting_balance = updates.startingBalance;
-    if (updates.quickAddProductIds !== undefined) dbUpdates.quick_add_product_ids = updates.quickAddProductIds;
+    if (updates.startingBalance !== undefined) dbUpdates.startingBalance = updates.startingBalance;
+    if (updates.quickAddProductIds !== undefined) dbUpdates.quickAddProductIds = updates.quickAddProductIds;
     if (updates.theme !== undefined) dbUpdates.theme = updates.theme;
     if (updates.staffAccounts !== undefined) dbUpdates.staffAccounts = updates.staffAccounts;
-    if (updates.ownerPassword !== undefined) dbUpdates.owner_password = updates.ownerPassword;
+    if (updates.ownerPassword !== undefined) dbUpdates.ownerPassword = updates.ownerPassword;
 
-    const { error } = await supabase.from("settings").update(dbUpdates).eq("id", currentUser.id);
+    const { error } = await supabase.from("settings").update(dbUpdates).eq("id", tenantOwnerId);
     if (error) throw error;
     setSettings((prev) => ({ ...prev, ...updates }));
   };
 
   const handleResetDatabase = async () => {
-    if (!currentUser) throw new Error("Not authenticated");
-    const tables = ["products", "customers", "commission_agents", "staff", "staff_logins", "sales", "expenses", "cheques", "electronic_transactions"];
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can reset store data.");
+    const tables = ["products", "customers", "commission_agents", "staff", "staff_logins", "sales", "expenses", "cheques", "electronicTxs"];
     for (const table of tables) {
-      await supabase.from(table).delete().eq("user_id", currentUser.id);
+      await supabase.from(table).delete().eq("userId", tenantOwnerId);
     }
     setProducts([]);
     setCustomers([]);
@@ -555,41 +557,45 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleAddCheque = async (cheque: Omit<Cheque, "id" | "timestamp">) => {
-    if (!currentUser) throw new Error("Not authenticated");
-    const newCheque = { ...cheque, user_id: currentUser.id, timestamp: new Date().toISOString() };
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage cheques.");
+    const newCheque = { ...cheque, userId: tenantOwnerId, timestamp: new Date().toISOString() };
     const { data, error } = await supabase.from("cheques").insert([newCheque]).select().single();
     if (error) throw error;
     setCheques((prev) => [...prev, data]);
   };
 
   const handleUpdateCheque = async (id: string, updates: Partial<Cheque>) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage cheques.");
     const { error } = await supabase.from("cheques").update(updates).eq("id", id);
     if (error) throw error;
     setCheques((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
   const handleDeleteCheque = async (id: string) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage cheques.");
     const { error } = await supabase.from("cheques").delete().eq("id", id);
     if (error) throw error;
     setCheques((prev) => prev.filter((c) => c.id !== id));
   };
 
   const handleAddElectronicTx = async (tx: Omit<ElectronicTx, "id" | "timestamp">) => {
-    if (!currentUser) throw new Error("Not authenticated");
-    const newTx = { ...tx, user_id: currentUser.id, timestamp: new Date().toISOString() };
-    const { data, error } = await supabase.from("electronic_transactions").insert([newTx]).select().single();
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    const newTx = { ...tx, userId: tenantOwnerId, timestamp: new Date().toISOString() };
+    const { data, error } = await supabase.from("electronicTxs").insert([newTx]).select().single();
     if (error) throw error;
     setElectronicTxs((prev) => [...prev, data]);
   };
 
   const handleUpdateElectronicTx = async (id: string, updates: Partial<ElectronicTx>) => {
-    const { error } = await supabase.from("electronic_transactions").update(updates).eq("id", id);
+    if (staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    const { error } = await supabase.from("electronicTxs").update(updates).eq("id", id);
     if (error) throw error;
     setElectronicTxs((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   };
 
   const handleDeleteElectronicTx = async (id: string) => {
-    const { error } = await supabase.from("electronic_transactions").delete().eq("id", id);
+    if (staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    const { error } = await supabase.from("electronicTxs").delete().eq("id", id);
     if (error) throw error;
     setElectronicTxs((prev) => prev.filter((t) => t.id !== id));
   };
