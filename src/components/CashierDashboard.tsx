@@ -2,14 +2,13 @@
 
 import React, { useMemo, useState } from "react";
 import { Search, ShoppingCart, Receipt, Package, Award } from "lucide-react";
-import { Product, Sale, Customer, StoreSettings } from "../types";
+import { Product, Sale, Customer } from "../types";
 import { isToday } from "../lib/dateUtils";
 
 interface CashierDashboardProps {
   sales: Sale[];
   products: Product[];
   customers: Customer[];
-  settings: StoreSettings;
   setActiveTab: (tab: string) => void;
   currency: string;
 }
@@ -18,7 +17,6 @@ export default function CashierDashboard({
   sales,
   products,
   customers,
-  settings,
   setActiveTab,
   currency,
 }: CashierDashboardProps) {
