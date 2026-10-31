@@ -167,6 +167,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setIsLoading(true);
+      // Clear prior tenant data before resolving the next authenticated identity.
+      setProducts([]);
+      setCustomers([]);
+      setCommissionAgents([]);
+      setStaff([]);
+      setStaffLogins([]);
+      setSales([]);
+      setExpenses([]);
+      setCheques([]);
+      setElectronicTxs([]);
+      setActualDrawerCash(null);
+      setSettings({ shopName: "My Shop", taxRate: 5, currency: "Rs", startingBalance: 0 });
       try {
         const [{ data: ownerData, error: ownerError }, { data: roleData, error: roleError }] = await Promise.all([
           supabase.rpc("current_staff_owner_id"),
@@ -233,30 +245,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { data: productsData, error: productsError } = await supabase
       .from("products").select(productSelect).eq("userId", userId);
     if (productsError) setSupabaseError(productsError);
-    if (productsData) setProducts(productsData);
+    setProducts(productsData || []);
 
     const { data: customersData, error: customersError } = await supabase
       .from("customers").select("*").eq("userId", userId);
     if (customersError) setSupabaseError(customersError);
-    if (customersData) setCustomers(customersData);
+    setCustomers(customersData || []);
 
     // Commission agents are outside the deployed staff permission matrix.
     // Do not query this unverified legacy table from a staff identity.
     if (!staffSession) {
       const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("userId", userId);
-      if (agentsData) setCommissionAgents(agentsData);
+      setCommissionAgents(agentsData || []);
     } else {
       setCommissionAgents([]);
     }
 
     const { data: staffData } = await supabase.from("staff").select("*").eq("userId", userId);
-    if (staffData) setStaff(staffData);
+    setStaff(staffData || []);
 
     const { data: loginsData, error: loginsError } = await supabase
       .from("staff_logins").select("*").eq("user_id", userId).order("created_at", { ascending: false });
     if (loginsError) setSupabaseError(loginsError);
-    if (loginsData) {
-      setStaffLogins(loginsData.map((l: any) => ({
+    setStaffLogins((loginsData || []).map((l: any) => ({
         id: l.id,
         userId: l.user_id,
         staffId: l.staff_id,
@@ -267,18 +278,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isActive: l.is_active,
         createdAt: l.created_at,
         terminatedAt: l.terminated_at,
-      })));
-    }
+    }));
 
     const { data: salesData, error: salesError } = await supabase
       .from("sales").select("*").eq("userId", userId).order("timestamp", { ascending: false });
     if (salesError) setSupabaseError(salesError);
-    if (salesData) setSales(salesData);
+    setSales(salesData || []);
 
     // Financial data is owner-only. Do not even request it from staff sessions.
     if (!staffSession) {
       const { data: expensesData } = await supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false });
-      if (expensesData) setExpenses(expensesData);
+      setExpenses(expensesData || []);
 
       const { data: settingsData } = await supabase.from("settings").select("*").eq("id", userId).maybeSingle();
       if (settingsData) {
@@ -295,10 +305,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       const { data: chequesData } = await supabase.from("cheques").select("*").eq("userId", userId);
-      if (chequesData) setCheques(chequesData);
+      setCheques(chequesData || []);
 
       const { data: electronicData } = await supabase.from("electronicTxs").select("*").eq("userId", userId);
-      if (electronicData) setElectronicTxs(electronicData);
+      setElectronicTxs(electronicData || []);
     } else {
       setExpenses([]);
       setCheques([]);
