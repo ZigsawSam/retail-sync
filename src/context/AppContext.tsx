@@ -227,7 +227,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const productSelect = staffSession?.role === "cashier"
       ? "id,name,category,sellingPrice,quantity,barcode,lowStockLimit,overstockLimit"
-      : "*";
+      : staffSession?.role === "inventory_manager"
+        ? "id,name,category,quantity,barcode,lowStockLimit,overstockLimit"
+        : "*";
     const { data: productsData, error: productsError } = await supabase
       .from("products").select(productSelect).eq("userId", userId);
     if (productsError) setSupabaseError(productsError);
@@ -361,7 +363,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleAddProduct = async (product: Omit<Product, "id">) => {
-    if (!currentUser) throw new Error("Not authenticated");
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can create products.");
     const { data, error } = await supabase
       .from("products")
       .insert([{ ...product, userId: tenantOwnerId }])
