@@ -128,12 +128,14 @@ CREATE POLICY staff_logins_staff_read_self
 
 COMMIT;
 
--- CUTOVER CHECKLIST (intentionally not executed by this migration):
--- 1. Implement owner-only server-side invitations using the Supabase service-role key.
--- 2. Test staff invitation, first sign-in, password recovery, and termination.
--- 3. Add reviewed, role-specific policies to each business table, using
---    current_staff_owner_id() and current_staff_role(); do not grant broad staff CRUD.
--- 4. Update the app to use camelCase deployed columns (e.g. "userId") where applicable.
--- 5. Only after successful end-to-end verification, revoke EXECUTE on
---    public.verify_staff_login(text,text) from PUBLIC, anon, authenticated.
--- 6. Remove legacy plaintext credential storage in a separate, verified cleanup.
+-- STAGED CUTOVER STATUS (this migration is still not executed):
+-- 1. Branch contains owner-only invitation and termination API routes; requires
+--    SUPABASE_SERVICE_ROLE_KEY in the server environment and end-to-end testing.
+-- 2. Branch contains Supabase Auth sign-in, invitation password setup, and recovery UI.
+-- 3. Role-specific RLS is defined in 20261031_staff_role_rls.sql; apply this
+--    foundation migration first, then the role migration.
+-- 4. Branch queries use the deployed camelCase tenant columns where verified.
+-- 5. Keep verify_staff_login(text,text) grants until the Auth cutover is deployed
+--    and verified; then revoke PUBLIC, anon, and authenticated execution.
+-- 6. Legacy plaintext credential values are intentionally preserved for now;
+--    remove them only after verified migration and backup.
