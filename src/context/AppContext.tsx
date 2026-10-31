@@ -255,7 +255,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Commission agents are outside the deployed staff permission matrix.
     // Do not query this unverified legacy table from a staff identity.
     if (!staffSession) {
-      const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("userId", userId);
+      const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("user_id", userId);
       setCommissionAgents(agentsData || []);
     } else {
       setCommissionAgents([]);
@@ -423,7 +423,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleAddCommissionAgent = async (agent: Omit<CommissionAgent, "totalEarnings">) => {
     if (staffSession) throw new Error("Staff accounts cannot manage commission agents.");
     if (!currentUser) throw new Error("Not authenticated");
-    const newAgent = { ...agent, totalEarnings: 0, userId: tenantOwnerId };
+    const newAgent = { ...agent, totalEarnings: 0, user_id: tenantOwnerId };
     const { data, error } = await supabase.from("commission_agents").insert([newAgent]).select().single();
     if (error) throw error;
     setCommissionAgents((prev) => [...prev, data]);
@@ -572,11 +572,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleResetDatabase = async () => {
     if (!currentUser || staffSession) throw new Error("Only the shop owner can reset store data.");
-    const tables = ["products", "customers", "commission_agents", "staff", "sales", "expenses", "cheques", "electronicTxs"];
+    const tables = ["products", "customers", "staff", "sales", "expenses", "cheques", "electronicTxs"];
     for (const table of tables) {
       const { error } = await supabase.from(table).delete().eq("userId", tenantOwnerId);
       if (error) throw error;
     }
+    const { error: agentsError } = await supabase.from("commission_agents").delete().eq("user_id", tenantOwnerId);
+    if (agentsError) throw agentsError;
     const { error: loginsError } = await supabase.from("staff_logins").delete().eq("user_id", tenantOwnerId);
     if (loginsError) throw loginsError;
     setProducts([]);
