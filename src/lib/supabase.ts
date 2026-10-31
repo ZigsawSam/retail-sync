@@ -370,10 +370,10 @@ export const parseSupabaseError = (error: any): UserFriendlyError => {
       friendlyMessage: "Database Access Restricted (Row-Level Security Policy Violation).",
       type: "rls_violation",
       troubleshootingSteps: [
-        "Row-Level Security (RLS) is currently enabled on your Supabase tables, blocking direct database writes.",
-        "To resolve this, go to your Supabase Dashboard -> SQL Editor, paste the following SQL, and click Run:",
-        "ALTER TABLE settings DISABLE ROW LEVEL SECURITY;\nALTER TABLE products DISABLE ROW LEVEL SECURITY;\nALTER TABLE customers DISABLE ROW LEVEL SECURITY;\nALTER TABLE staff DISABLE ROW LEVEL SECURITY;\nALTER TABLE sales DISABLE ROW LEVEL SECURITY;\nALTER TABLE expenses DISABLE ROW LEVEL SECURITY;\nALTER TABLE \"electronicTxs\" DISABLE ROW LEVEL SECURITY;\nALTER TABLE cheques DISABLE ROW LEVEL SECURITY;\nALTER TABLE \"actualDrawerCash\" DISABLE ROW LEVEL SECURITY;",
-        "If you prefer to keep RLS active, you must create permissive Policies allowing authenticated/anonymous insert and select operations."
+        "Row-Level Security (RLS) rejected this request. Keep RLS enabled; do not disable it or add broad anonymous policies.",
+        "Verify that the signed-in user owns the target row and that the table has tenant-scoped SELECT/INSERT/UPDATE/DELETE policies using auth.uid().",
+        "Compare the deployed table and column names with the application queries. Apply a reviewed, versioned migration after backing up the database.",
+        "If the request is made by staff, verify that the staff identity is securely authenticated and mapped to the correct tenant before granting database access."
       ]
     };
   }
