@@ -116,6 +116,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
+  const [tenantOwnerId, setTenantOwnerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<ERPRole>("admin");
   const [supabaseError, setSupabaseError] = useState<any>(null);
@@ -138,29 +139,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [actualDrawerCash, setActualDrawerCash] = useState<number | null>(null);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
-  // Load staff session from sessionStorage on mount
+  // Auth listener: owner and staff both use Supabase Auth.
   useEffect(() => {
-    const saved = sessionStorage.getItem("staffSession");
-    if (saved) {
-      try {
-        setStaffSession(JSON.parse(saved));
-      } catch {}
-    }
-  }, []);
-
-  // Persist staff session
-  useEffect(() => {
-    if (staffSession) {
-      sessionStorage.setItem("staffSession", JSON.stringify(staffSession));
-    } else {
-      sessionStorage.removeItem("staffSession");
-    }
-  }, [staffSession]);
-
-  // Auth listener
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setCurrentUser(session?.user ?? null);
+      if (!session?.user) {
+        setStaffSession(null);
+        setTenantOwnerId(null);
+      }
       setIsLoading(false);
     });
 
@@ -169,125 +155,146 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     });
 
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
+    return () => authListener?.subscription.unsubscribe();
   }, []);
 
-  // Fetch all data when user is authenticated
+  // Resolve a staff Auth identity to its shop tenant using database-owned helpers.
+  // Never trust a role or owner ID from localStorage/sessionStorage.
+  useEffect(() => {
+    let cancelled = false;
+    const resolveIdentity = async () => {
+      if (!currentUser) {
+        setTenantOwnerId(null);
+        setStaffSession(null);
+        return;
+      }
+      setIsLoading(true);
+      try {
+        const [{ data: ownerData, error: ownerError }, { data: roleData, error: roleError }] = await Promise.all([
+          supabase.rpc("current_staff_owner_id"),
+          supabase.rpc("current_staff_role"),
+        ]);
+        if (ownerError || roleError) throw ownerError || roleError;
+        const role = typeof roleData === "string" ? roleData : null;
+        const ownerId = typeof ownerData === "string" ? ownerData : null;
+
+        if (role && ownerId && ["cashier", "inventory_manager"].includes(role)) {
+          const { data: login, error: loginError } = await supabase
+            .from("staff_logins")
+            .select("id,name,role")
+            .eq("auth_user_id", currentUser.id)
+            .eq("is_active", true)
+            .is("terminated_at", null)
+            .maybeSingle();
+          if (loginError) throw loginError;
+          if (!login) throw new Error("This staff account is inactive or not assigned to a shop.");
+          if (!cancelled) {
+            setTenantOwnerId(ownerId);
+            setStaffSession({ staffLoginId: login.id, name: login.name, role: login.role });
+            setSelectedRole(login.role);
+          }
+        } else {
+          if (!cancelled) {
+            setTenantOwnerId(currentUser.id);
+            setStaffSession(null);
+            setSelectedRole("admin");
+          }
+        }
+      } catch (error: any) {
+        console.error("Unable to resolve authenticated operator:", error);
+        if (!cancelled) {
+          setTenantOwnerId(null);
+          setStaffSession(null);
+          setSupabaseError(error);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    resolveIdentity();
+    return () => { cancelled = true; };
+  }, [currentUser]);
+
+  // Fetch only rows the authenticated identity is authorized to see via RLS.
   const fetchAllData = useCallback(async () => {
-    if (!currentUser) return;
+    if (!currentUser || !tenantOwnerId) return;
+    const userId = tenantOwnerId;
 
-    const userId = currentUser.id;
-
-    // Products
-    const { data: productsData } = await supabase
-      .from("products")
-      .select("*")
-      .eq("user_id", userId);
+    const { data: productsData, error: productsError } = await supabase
+      .from("products").select("*").eq("userId", userId);
+    if (productsError) setSupabaseError(productsError);
     if (productsData) setProducts(productsData);
 
-    // Customers
-    const { data: customersData } = await supabase
-      .from("customers")
-      .select("*")
-      .eq("user_id", userId);
+    const { data: customersData, error: customersError } = await supabase
+      .from("customers").select("*").eq("userId", userId);
+    if (customersError) setSupabaseError(customersError);
     if (customersData) setCustomers(customersData);
 
-    // Commission agents
-    const { data: agentsData } = await supabase
-      .from("commission_agents")
-      .select("*")
-      .eq("user_id", userId);
+    // This legacy table is not present in the supplied deployed schema inventory.
+    // Keep it isolated; its failure must not block core retail data.
+    const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("user_id", userId);
     if (agentsData) setCommissionAgents(agentsData);
 
-    // Staff
-    const { data: staffData } = await supabase
-      .from("staff")
-      .select("*")
-      .eq("user_id", userId);
+    const { data: staffData } = await supabase.from("staff").select("*").eq("userId", userId);
     if (staffData) setStaff(staffData);
 
-    // Staff logins
-    const { data: loginsData } = await supabase
-      .from("staff_logins")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
+    const { data: loginsData, error: loginsError } = await supabase
+      .from("staff_logins").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+    if (loginsError) setSupabaseError(loginsError);
     if (loginsData) {
-      setStaffLogins(
-        loginsData.map((l: any) => ({
-          id: l.id,
-          userId: l.user_id,
-          staffId: l.staff_id,
-          name: l.name,
-          role: l.role,
-          email: l.email,
-          password: l.password,
-          isActive: l.is_active,
-          createdAt: l.created_at,
-          terminatedAt: l.terminated_at,
-        }))
-      );
+      setStaffLogins(loginsData.map((l: any) => ({
+        id: l.id,
+        userId: l.user_id,
+        staffId: l.staff_id,
+        authUserId: l.auth_user_id,
+        name: l.name,
+        role: l.role,
+        email: l.email,
+        isActive: l.is_active,
+        createdAt: l.created_at,
+        terminatedAt: l.terminated_at,
+      })));
     }
 
-    // Sales
-    const { data: salesData } = await supabase
-      .from("sales")
-      .select("*")
-      .eq("user_id", userId)
-      .order("timestamp", { ascending: false });
+    const { data: salesData, error: salesError } = await supabase
+      .from("sales").select("*").eq("userId", userId).order("timestamp", { ascending: false });
+    if (salesError) setSupabaseError(salesError);
     if (salesData) setSales(salesData);
 
-    // Expenses
-    const { data: expensesData } = await supabase
-      .from("expenses")
-      .select("*")
-      .eq("user_id", userId)
-      .order("timestamp", { ascending: false });
-    if (expensesData) setExpenses(expensesData);
+    // Financial data is owner-only. Do not even request it from staff sessions.
+    if (!staffSession) {
+      const { data: expensesData } = await supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false });
+      if (expensesData) setExpenses(expensesData);
 
-    // Settings
-    const { data: settingsData } = await supabase
-      .from("settings")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    if (settingsData) {
-      setSettings({
-        shopName: settingsData.shop_name || "My Shop",
-        taxRate: settingsData.tax_rate || 5,
-        currency: settingsData.currency || "Rs",
-        startingBalance: settingsData.starting_balance || 0,
-        quickAddProductIds: settingsData.quick_add_product_ids || [],
-        theme: settingsData.theme || "enterprise",
-        staffAccounts: settingsData.staffAccounts || {},
-        ownerPassword: settingsData.owner_password,
-      });
+      const { data: settingsData } = await supabase.from("settings").select("*").eq("id", userId).maybeSingle();
+      if (settingsData) {
+        setSettings({
+          shopName: settingsData.shopName || "My Shop",
+          taxRate: settingsData.taxRate ?? 5,
+          currency: settingsData.currency || "Rs",
+          startingBalance: settingsData.startingBalance ?? 0,
+          quickAddProductIds: settingsData.quickAddProductIds || [],
+          theme: settingsData.theme || "enterprise",
+          staffAccounts: settingsData.staffAccounts || {},
+          ownerPassword: settingsData.ownerPassword,
+        });
+      }
+
+      const { data: chequesData } = await supabase.from("cheques").select("*").eq("userId", userId);
+      if (chequesData) setCheques(chequesData);
+
+      const { data: electronicData } = await supabase.from("electronicTxs").select("*").eq("userId", userId);
+      if (electronicData) setElectronicTxs(electronicData);
+    } else {
+      setExpenses([]);
+      setCheques([]);
+      setElectronicTxs([]);
     }
-
-    // Cheques
-    const { data: chequesData } = await supabase
-      .from("cheques")
-      .select("*")
-      .eq("user_id", userId);
-    if (chequesData) setCheques(chequesData);
-
-    // Electronic transactions
-    const { data: electronicData } = await supabase
-      .from("electronic_transactions")
-      .select("*")
-      .eq("user_id", userId);
-    if (electronicData) setElectronicTxs(electronicData);
-  }, [currentUser]);
+  }, [currentUser, tenantOwnerId, staffSession]);
 
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
-
-  // ============================================
-  // AUTH FUNCTIONS
-  // ============================================
 
   const handleLogin = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -297,71 +304,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
+    setTenantOwnerId(null);
     setStaffSession(null);
-    sessionStorage.removeItem("staffSession");
+    setSelectedRole("admin");
   };
 
-  // CUSTOM STAFF LOGIN — queries staff_logins table directly
-  // Does NOT use Supabase Auth (staff are not auth.users)
-  const handleStaffLogin = async (email: string, password: string) => {
-    if (!currentUser) throw new Error("Owner not logged in");
-
-    const { data, error } = await supabase
-      .from("staff_logins")
-      .select("*")
-      .eq("user_id", currentUser.id)
-      .eq("email", email)
-      .eq("password", password)
-      .eq("is_active", true)
-      .single();
-
-    if (error || !data) {
-      throw new Error("Invalid staff credentials");
-    }
-
-    const session: StaffSession = {
-      staffLoginId: data.id,
-      name: data.name,
-      role: data.role,
-    };
-
-    setStaffSession(session);
+  // Legacy callback retained for component compatibility; credentials are no longer checked here.
+  const handleStaffLogin = async (_email: string, _password: string) => {
+    throw new Error("Staff must sign in using their individual Supabase Auth invitation.");
   };
 
   const handleStaffLogout = () => {
-    setStaffSession(null);
-    sessionStorage.removeItem("staffSession");
+    void handleLogout();
   };
 
-  // Switch operator role (for owner)
-  const handleSwitchOperator = async (role: ERPRole, password?: string, email?: string) => {
-    try {
-      if (role === "admin") {
-        setStaffSession(null);
-        setSelectedRole("admin");
-        sessionStorage.removeItem("staffSession");
-        return { success: true, message: "Admin controls unlocked." };
-      }
-
-      if (!currentUser) return { success: false, message: "Owner session is unavailable. Sign in again." };
-      if (!email?.trim() || !password) return { success: false, message: "Enter the staff email and password." };
-
-      const { data, error } = await supabase
-        .from("staff_logins")
-        .select("id,name,role")
-        .eq("user_id", currentUser.id)
-        .eq("email", email.trim().toLowerCase())
-        .eq("password", password)
-        .eq("role", role)
-        .eq("is_active", true)
-        .single();
-
-      if (error || !data) return { success: false, message: "Invalid staff credentials or inactive account." };
-      setStaffSession({ staffLoginId: data.id, name: data.name, role: data.role });
-      return { success: true, message: "Operator session changed." };
-    } catch (error: any) {
-      return { success: false, message: error?.message || "Unable to switch operator." };
+  const handleSwitchOperator = async (role: ERPRole) => {
+    if (role === "admin" && staffSession) {
+      return { success: false, message: "Staff accounts cannot switch into the owner role." };
     }
+    if (staffSession && role !== staffSession.role) {
+      return { success: false, message: "Your account is not authorized for that role." };
+    }
+    if (!staffSession && role !== "admin") {
+      return { success: false, message: "Use the staff member's own Auth account to enter a staff role." };
+    }
+    setSelectedRole(role);
+    return { success: true, message: role === "admin" ? "Owner controls active." : "Staff role active." };
   };
 
   // ============================================
