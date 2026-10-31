@@ -43,6 +43,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     window.location.reload();
   };
 
+  // Invitation and recovery links must be reachable before an app session exists.
+  if (pathname === "/auth/reset-password") {
+    return <>{children}</>;
+  }
+
   // Splash Loading Screen
   if (authLoading) {
     return (
@@ -76,11 +81,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const setActiveTab = (tab: string) => {
     router.push(`/${tab}`);
   };
-
-  // Invitation and recovery links must be reachable before an app session exists.
-  if (pathname === "/auth/reset-password") {
-    return <>{children}</>;
-  }
 
   const activeTheme = settings.theme || "bauhaus";
   const themeClassName = `theme-${activeTheme}`;
