@@ -192,6 +192,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setSelectedRole(login.role);
           }
         } else {
+          // A null staff mapping is not proof of owner status. Confirm an owner
+          // settings row exists before granting the owner UI/session context.
+          const { data: ownerSettings, error: settingsError } = await supabase
+            .from("settings").select("id").eq("id", currentUser.id).maybeSingle();
+          if (settingsError) throw settingsError;
+          if (!ownerSettings) throw new Error("This account is not an active shop owner or staff member.");
           if (!cancelled) {
             setTenantOwnerId(currentUser.id);
             setStaffSession(null);
@@ -203,6 +209,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) {
           setTenantOwnerId(null);
           setStaffSession(null);
+          setSelectedRole("cashier");
           setSupabaseError(error);
         }
       } finally {
