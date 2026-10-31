@@ -144,7 +144,8 @@ AS $function$
 BEGIN
   IF public.current_staff_role() = 'inventory_manager'
      AND public.current_staff_owner_id()::text = OLD."userId" THEN
-    IF (to_jsonb(NEW) - 'quantity') IS DISTINCT FROM (to_jsonb(OLD) - 'quantity') THEN
+    IF (to_jsonb(NEW) - 'quantity' - 'updated_at' - 'updatedAt') IS DISTINCT FROM
+       (to_jsonb(OLD) - 'quantity' - 'updated_at' - 'updatedAt') THEN
       RAISE EXCEPTION 'Inventory managers may update stock quantity only';
     END IF;
     IF NEW.quantity < 0 THEN
