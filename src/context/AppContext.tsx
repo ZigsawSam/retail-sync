@@ -37,6 +37,14 @@ interface AppContextType {
   currentUser: any;
   staffSession: StaffSession | null;
   isLoading: boolean;
+  authLoading: boolean;
+  currentRole: ERPRole;
+  operatorRole: ERPRole;
+  cashInHand: number;
+  currency: string;
+  supabaseError: any;
+  setSupabaseError: (error: any) => void;
+  handleRoleChange: (role: ERPRole) => void;
 
   // Data
   products: Product[];
@@ -59,7 +67,7 @@ interface AppContextType {
   handleLogout: () => Promise<void>;
   handleStaffLogin: (email: string, password: string) => Promise<void>;
   handleStaffLogout: () => void;
-  handleSwitchOperator: (role: ERPRole) => Promise<void>;
+  handleSwitchOperator: (role: ERPRole, password?: string, email?: string) => Promise<{ success: boolean; message: string }>;
 
   handleAddProduct: (product: Omit<Product, "id">) => Promise<void>;
   handleUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
@@ -104,6 +112,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedRole, setSelectedRole] = useState<ERPRole>("admin");
+  const [supabaseError, setSupabaseError] = useState<any>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -317,34 +327,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Switch operator role (for owner)
-  const handleSwitchOperator = async (role: ERPRole) => {
-    if (role === "admin") {
-      setStaffSession(null);
-      sessionStorage.removeItem("staffSession");
-      return;
+  const handleSwitchOperator = async (role: ERPRole, password?: string, email?: string) => {
+    try {
+      if (role === "admin") {
+        setStaffSession(null);
+        setSelectedRole("admin");
+        sessionStorage.removeItem("staffSession");
+        return { success: true, message: "Admin controls unlocked." };
+      }
+
+      if (!currentUser) return { success: false, message: "Owner session is unavailable. Sign in again." };
+      if (!email?.trim() || !password) return { success: false, message: "Enter the staff email and password." };
+
+      const { data, error } = await supabase
+        .from("staff_logins")
+        .select("id,name,role")
+        .eq("user_id", currentUser.id)
+        .eq("email", email.trim().toLowerCase())
+        .eq("password", password)
+        .eq("role", role)
+        .eq("is_active", true)
+        .single();
+
+      if (error || !data) return { success: false, message: "Invalid staff credentials or inactive account." };
+      setStaffSession({ staffLoginId: data.id, name: data.name, role: data.role });
+      return { success: true, message: "Operator session changed." };
+    } catch (error: any) {
+      return { success: false, message: error?.message || "Unable to switch operator." };
     }
-
-    if (!currentUser) throw new Error("Owner not logged in");
-
-    const { data, error } = await supabase
-      .from("staff_logins")
-      .select("*")
-      .eq("user_id", currentUser.id)
-      .eq("role", role === "cashier" ? "cashier" : "inventory_manager")
-      .eq("is_active", true)
-      .single();
-
-    if (error || !data) {
-      throw new Error(`No active ${role} found. Onboard staff in Settings.`);
-    }
-
-    const session: StaffSession = {
-      staffLoginId: data.id,
-      name: data.name,
-      role: data.role,
-    };
-
-    setStaffSession(session);
   };
 
   // ============================================
@@ -604,6 +614,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setElectronicTxs((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const currentRole: ERPRole = staffSession?.role ?? selectedRole;
+  const operatorRole: ERPRole = staffSession?.role ?? selectedRole;
+  const handleRoleChange = (role: ERPRole) => {
+    if (!staffSession) setSelectedRole(role);
+  };
+  const cashInHand = Number(settings.startingBalance || 0);
+  const currency = settings.currency || "Rs";
+
   const lowStockProducts = products.filter((p) => p.quantity <= p.lowStockLimit);
   const overstockProducts = products.filter((p) => p.quantity >= p.overstockLimit);
 
@@ -613,6 +631,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         staffSession,
         isLoading,
+        authLoading: isLoading,
+        currentRole,
+        operatorRole,
+        cashInHand,
+        currency,
+        supabaseError,
+        setSupabaseError,
+        handleRoleChange,
         products,
         customers,
         commissionAgents,
