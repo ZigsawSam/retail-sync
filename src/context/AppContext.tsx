@@ -409,6 +409,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleAddCommissionAgent = async (agent: Omit<CommissionAgent, "totalEarnings">) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage commission agents.");
     if (!currentUser) throw new Error("Not authenticated");
     const newAgent = { ...agent, totalEarnings: 0, userId: tenantOwnerId };
     const { data, error } = await supabase.from("commission_agents").insert([newAgent]).select().single();
@@ -417,18 +418,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateCommissionAgent = async (phone: string, updates: Partial<CommissionAgent>) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage commission agents.");
     const { error } = await supabase.from("commission_agents").update(updates).eq("phone", phone);
     if (error) throw error;
     setCommissionAgents((prev) => prev.map((a) => (a.phone === phone ? { ...a, ...updates } : a)));
   };
 
   const handleDeleteCommissionAgent = async (phone: string) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage commission agents.");
     const { error } = await supabase.from("commission_agents").delete().eq("phone", phone);
     if (error) throw error;
     setCommissionAgents((prev) => prev.filter((a) => a.phone !== phone));
   };
 
   const handleAddStaff = async (staffMember: Omit<Staff, "id" | "attendance">) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage staff records.");
     if (!currentUser) throw new Error("Not authenticated");
     const newStaff = { ...staffMember, attendance: {}, userId: tenantOwnerId };
     const { data, error } = await supabase.from("staff").insert([newStaff]).select().single();
@@ -437,18 +441,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateStaff = async (id: string, updates: Partial<Staff>) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage staff records.");
     const { error } = await supabase.from("staff").update(updates).eq("id", id);
     if (error) throw error;
     setStaff((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   };
 
   const handleDeleteStaff = async (id: string) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage staff records.");
     const { error } = await supabase.from("staff").delete().eq("id", id);
     if (error) throw error;
     setStaff((prev) => prev.filter((s) => s.id !== id));
   };
 
   const handleMarkAttendance = async (staffId: string, date: string, present: boolean, hoursWorked?: number) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage attendance.");
     const staffMember = staff.find((s) => s.id === staffId);
     if (!staffMember) return;
 
@@ -685,7 +692,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleAddCheque,
         handleUpdateCheque,
         handleDeleteCheque,
-        handleUpdateActualDrawerCash: async (amount: number | null) => { setActualDrawerCash(amount); },
+        handleUpdateActualDrawerCash: async (amount: number | null) => { if (staffSession) throw new Error("Staff accounts cannot access drawer cash."); setActualDrawerCash(amount); },
         handleAddElectronicTx,
         handleUpdateElectronicTx,
         handleDeleteElectronicTx,
