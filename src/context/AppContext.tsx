@@ -238,10 +238,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (customersError) setSupabaseError(customersError);
     if (customersData) setCustomers(customersData);
 
-    // This legacy table is not present in the supplied deployed schema inventory.
-    // Keep it isolated; its failure must not block core retail data.
-    const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("userId", userId);
-    if (agentsData) setCommissionAgents(agentsData);
+    // Commission agents are outside the deployed staff permission matrix.
+    // Do not query this unverified legacy table from a staff identity.
+    if (!staffSession) {
+      const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("userId", userId);
+      if (agentsData) setCommissionAgents(agentsData);
+    } else {
+      setCommissionAgents([]);
+    }
 
     const { data: staffData } = await supabase.from("staff").select("*").eq("userId", userId);
     if (staffData) setStaff(staffData);
