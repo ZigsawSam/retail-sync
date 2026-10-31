@@ -3,7 +3,6 @@
 import React, { useState, useMemo } from "react";
 import { 
   Package, 
-  Plus, 
   AlertTriangle, 
    RefreshCw, 
    CheckCircle,
@@ -76,7 +75,7 @@ export default function InventoryDashboard({
         <div>
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-black text-[#FFC300] border-2 border-black text-[10px] font-black uppercase tracking-wider mb-2 font-mono">
             <Package className="w-3.5 h-3.5" />
-            <span>Station: Stockroom & Procurement</span>
+            <span>Station: Stockroom & Stock Control</span>
           </div>
           <h2 className="text-3xl font-black uppercase tracking-tight text-black">Inventory Manager Center</h2>
           <p className="text-xs text-zinc-600 font-mono mt-1 uppercase tracking-widest font-bold">Role active • Warehousing Node • Stock levels monitored real-time</p>
@@ -125,7 +124,7 @@ export default function InventoryDashboard({
                 <span>Critical Stock Level Warnings</span>
               </h3>
               <p className="text-xs text-zinc-600 font-bold font-mono">
-                Procure or adjust stock counts immediately to avoid out-of-stock POS bottlenecks.
+                Review and correct stock counts to avoid out-of-stock POS bottlenecks.
               </p>
             </div>
 
