@@ -5,31 +5,20 @@ import {
   Package, 
   Plus, 
   AlertTriangle, 
-  DollarSign, 
-  RefreshCw, 
-  FileSpreadsheet, 
-  CheckCircle,
-  Hash
-} from "lucide-react";
-import { Product, StoreSettings } from "../types";
+   RefreshCw, 
+   CheckCircle,
+ } from "lucide-react";
+import { Product } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 
 interface InventoryDashboardProps {
   products: Product[];
-  settings: StoreSettings;
-  setActiveTab: (tab: string) => void;
-  onAddProduct: (prod: Product) => void;
-  onUpdateProductStock: (id: string, qty: number) => void;
-  currency: string;
-}
+    onUpdateProductStock: (id: string, qty: number) => void;
+ }
 
 export default function InventoryDashboard({
   products,
-  settings,
-  setActiveTab,
-  onAddProduct,
-  onUpdateProductStock,
-  currency
+  onUpdateProductStock
 }: InventoryDashboardProps) {
 
   // Toast / Status messages
@@ -44,26 +33,10 @@ export default function InventoryDashboard({
   const [editingProdId, setEditingProdId] = useState<string | null>(null);
   const [quickStockVal, setQuickStockVal] = useState("");
 
-  // Create Product Form States
-  const [newProdName, setNewProdName] = useState("");
-  const [newProdBarcode, setNewProdBarcode] = useState("");
-  const [newProdCategory, setNewProdCategory] = useState("Groceries");
-  const [newProdPrice, setNewProdPrice] = useState("");
-  const [newProdCostPrice, setNewProdCostPrice] = useState("");
-  const [newProdQty, setNewProdQty] = useState("");
-  const [newProdSupplier, setNewProdSupplier] = useState("");
 
   // Low Stock threshold: products with quantity <= lowStockLimit
   const lowStockProducts = useMemo(() => {
     return products.filter(p => p.quantity <= (p.lowStockLimit || 5));
-  }, [products]);
-
-  const totalInventoryValue = useMemo(() => {
-    return products.reduce((sum, p) => sum + (p.quantity * p.sellingPrice), 0);
-  }, [products]);
-
-  const totalInvestmentValue = useMemo(() => {
-    return products.reduce((sum, p) => sum + (p.quantity * (p.purchasePrice || p.sellingPrice * 0.7)), 0);
   }, [products]);
 
   const handleUpdateStockSubmit = (e: React.FormEvent, productId: string) => {
@@ -79,46 +52,6 @@ export default function InventoryDashboard({
     setQuickStockVal("");
   };
 
-  const handleCreateProduct = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProdName || !newProdBarcode || !newProdPrice || !newProdCostPrice || !newProdQty) {
-      triggerToast("Please fill all required inputs");
-      return;
-    }
-
-    const priceNum = parseFloat(newProdPrice);
-    const costPriceNum = parseFloat(newProdCostPrice);
-    const qtyNum = parseInt(newProdQty, 10);
-
-    if (isNaN(priceNum) || priceNum < 0 || isNaN(costPriceNum) || costPriceNum < 0 || isNaN(qtyNum) || qtyNum < 0) {
-      triggerToast("Numeric values must be valid non-negative counts");
-      return;
-    }
-
-    const newProduct: Product = {
-      id: `prod-${Date.now()}`,
-      name: newProdName,
-      barcode: newProdBarcode,
-      category: newProdCategory,
-      purchasePrice: costPriceNum,
-      sellingPrice: priceNum,
-      quantity: qtyNum,
-      lowStockLimit: 5,
-      overstockLimit: 100
-    };
-
-    onAddProduct(newProduct);
-    
-    triggerToast(`Created product ${newProdName} and updated stock.`);
-    
-    // Clear state
-    setNewProdName("");
-    setNewProdBarcode("");
-    setNewProdPrice("");
-    setNewProdCostPrice("");
-    setNewProdQty("");
-    setNewProdSupplier("");
-  };
 
   return (
     <div className="flex-1 overflow-y-auto bg-[#F5F2EB] p-8 text-black select-none font-sans">
@@ -149,15 +82,6 @@ export default function InventoryDashboard({
           <p className="text-xs text-zinc-600 font-mono mt-1 uppercase tracking-widest font-bold">Role active • Warehousing Node • Stock levels monitored real-time</p>
         </div>
 
-        <div>
-          <button 
-            onClick={() => setActiveTab("operations")}
-            className="flex items-center gap-3 px-6 py-3.5 bg-black text-white border-3 border-black rounded-none text-sm font-black tracking-wider hover:bg-zinc-800 transition-all shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 cursor-pointer"
-          >
-            <FileSpreadsheet className="w-5 h-5 text-white" />
-            <span>MANAGE ALL PRODUCTS CATALOG</span>
-          </button>
-        </div>
       </div>
 
       {/* Warehousing Key Stats */}
@@ -186,29 +110,12 @@ export default function InventoryDashboard({
           </div>
         </div>
 
-        {/* Total Wholesale Capital */}
-        <div className="bg-white p-5 rounded-none border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <p className="text-[9px] text-zinc-500 font-black uppercase font-mono tracking-wider">CAPITAL INVESTMENT</p>
-          <p className="text-2xl font-black font-mono mt-2">{currency}{totalInvestmentValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-          <div className="text-[10px] text-zinc-500 font-bold mt-2 font-mono uppercase">
-            Asset cost basis value
-          </div>
-        </div>
-
-        {/* Estimated Retail Value */}
-        <div className="bg-[#0055A5] p-5 rounded-none border-3 border-black text-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <p className="text-[9px] text-[#FFC300] font-black uppercase font-mono tracking-wider">POTENTIAL REVENUE</p>
-          <p className="text-2xl font-black font-mono mt-2">{currency}{totalInventoryValue.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-          <div className="text-[10px] text-white/95 font-semibold mt-2 font-mono uppercase">
-            Valued at full ticket prices
-          </div>
-        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left Column: low-stock warnings and quick updates */}
-        <div className="lg:col-span-7 space-y-8">
+        <div className="lg:col-span-12 space-y-8">
           
           {/* Low Stock alert banner */}
           <div className="bg-white p-6 rounded-none border-3 border-black shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">
@@ -296,7 +203,6 @@ export default function InventoryDashboard({
                     <th className="py-2.5 px-3">Product SKU</th>
                     <th className="py-2.5 px-3">Category</th>
                     <th className="py-2.5 px-3 text-right">In-Stock</th>
-                    <th className="py-2.5 px-3 text-right">Wholesale Cost</th>
                     <th className="py-2.5 px-3 text-center">Action</th>
                   </tr>
                 </thead>
@@ -310,9 +216,6 @@ export default function InventoryDashboard({
                       <td className="py-2.5 px-3 text-zinc-600">{p.category}</td>
                       <td className={`py-2.5 px-3 text-right font-black ${p.quantity <= (p.lowStockLimit || 5) ? "text-red-600" : "text-black"}`}>
                         {p.quantity}
-                      </td>
-                      <td className="py-2.5 px-3 text-right font-black">
-                        {currency}{(p.purchasePrice || p.sellingPrice * 0.7).toFixed(2)}
                       </td>
                       <td className="py-2.5 px-3 text-center">
                         {editingProdId === p.id ? (
@@ -349,136 +252,6 @@ export default function InventoryDashboard({
                 </tbody>
               </table>
             </div>
-          </div>
-
-        </div>
-
-        {/* Right Column: Add New Product and Procurement logging */}
-        <div className="lg:col-span-5 space-y-8">
-          
-          {/* PROCUREMENT INCOMING FORM */}
-          <div className="bg-white p-6 rounded-none border-3 border-black shadow-[5px_5px_0px_0px_rgba(0,0,0,1)]">
-            <div className="border-b-2 border-black pb-3 mb-4">
-              <h3 className="text-lg font-black uppercase text-black flex items-center gap-2">
-                <Plus className="w-5 h-5 text-emerald-600" />
-                <span>Log Procured Consignment</span>
-              </h3>
-              <p className="text-xs text-zinc-600 font-bold font-mono">
-                Log newly procured stock batches and update SKU levels. Financial expense entries are managed by the shop owner.
-              </p>
-            </div>
-
-            <form onSubmit={handleCreateProduct} className="space-y-4 font-mono text-xs">
-              <div>
-                <label className="block text-[10px] font-black uppercase mb-1.5 text-zinc-700">Product Name *</label>
-                <input 
-                  type="text"
-                  required
-                  placeholder="e.g. Premium Basmati Rice"
-                  value={newProdName}
-                  onChange={(e) => setNewProdName(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black uppercase mb-1.5 text-zinc-700">Barcode / SKU *</label>
-                  <input 
-                    type="text"
-                    required
-                    placeholder="e.g. 8901058"
-                    value={newProdBarcode}
-                    onChange={(e) => setNewProdBarcode(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black uppercase mb-1.5 text-zinc-700">Category *</label>
-                  <select 
-                    value={newProdCategory}
-                    onChange={(e) => setNewProdCategory(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
-                  >
-                    <option value="Groceries">Groceries</option>
-                    <option value="Cosmetics">Cosmetics</option>
-                    <option value="Stationery">Stationery</option>
-                    <option value="Hardware">Hardware</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[9px] font-black uppercase mb-1.5 text-zinc-700">Cost Price *</label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="Cost"
-                    value={newProdCostPrice}
-                    onChange={(e) => setNewProdCostPrice(e.target.value)}
-                    className="w-full px-2 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black uppercase mb-1.5 text-zinc-700">Retail Price *</label>
-                  <input 
-                    type="number"
-                    step="0.01"
-                    required
-                    placeholder="Retail"
-                    value={newProdPrice}
-                    onChange={(e) => setNewProdPrice(e.target.value)}
-                    className="w-full px-2 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] font-black uppercase mb-1.5 text-zinc-700">Initial Qty *</label>
-                  <input 
-                    type="number"
-                    required
-                    placeholder="Qty"
-                    value={newProdQty}
-                    onChange={(e) => setNewProdQty(e.target.value)}
-                    className="w-full px-2 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-[10px] font-black uppercase mb-1.5 text-zinc-700">Consignment Supplier / Vendor</label>
-                <input 
-                  type="text"
-                  placeholder="e.g. Apex Agri Products Ltd."
-                  value={newProdSupplier}
-                  onChange={(e) => setNewProdSupplier(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
-                />
-              </div>
-
-              <button 
-                type="submit"
-                className="w-full py-3 bg-black hover:bg-zinc-800 text-white border-2 border-black rounded-none text-xs font-mono font-black uppercase tracking-wider transition-all cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
-              >
-                PROCURE STOCK & UPDATE INVENTORY
-              </button>
-            </form>
-          </div>
-
-          {/* STOCKROOM NOTEBOARD */}
-          <div className="bg-[#FFC300]/10 p-5 border-2 border-[#FFC300] font-mono text-xs">
-            <p className="font-black uppercase tracking-wider text-black flex items-center gap-1.5 mb-1.5">
-              <Hash className="w-4 h-4 text-[#D63031]" />
-              <span>STOCK PROTOCOLS</span>
-            </p>
-            <ul className="list-disc pl-4 space-y-1 text-zinc-700 leading-relaxed font-semibold text-[11px]">
-              <li>Upon batch arrival, count and verify barcode/SKU numbers before adding them to the virtual catalog.</li>
-              <li>Always enter actual wholesale procurement cost price to track precise gross margin levels on sales charts.</li>
-              <li>Report damaged or spoiled stock to the shop owner for financial adjustment.</li>
-            </ul>
           </div>
 
         </div>
