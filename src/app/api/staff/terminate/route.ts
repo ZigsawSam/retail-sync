@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
 
     const caller = createClient(url, anonKey, { auth: { persistSession: false }, global: { headers: { Authorization: `Bearer ${token}` } } });
     const admin = createClient(url, serviceKey, { auth: { persistSession: false } });
-    const { data: identity, error: identityError } = await caller.auth.getUser();
+    const { data: identity, error: identityError } = await caller.auth.getUser(token);
     if (identityError || !identity.user) return NextResponse.json({ error: "Invalid session." }, { status: 401 });
     const ownerId = identity.user.id;
 
