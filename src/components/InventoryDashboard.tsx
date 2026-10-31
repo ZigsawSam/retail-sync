@@ -11,7 +11,7 @@ import {
   CheckCircle,
   Hash
 } from "lucide-react";
-import { Product, Expense, StoreSettings } from "../types";
+import { Product, StoreSettings } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { getShopLocalISOString } from "../lib/dateUtils";
 
@@ -22,7 +22,6 @@ interface InventoryDashboardProps {
   setActiveTab: (tab: string) => void;
   onAddProduct: (prod: Product) => void;
   onUpdateProductStock: (id: string, qty: number) => void;
-  onAddExpense: (expense: Expense) => void;
   currency: string;
 }
 
@@ -33,8 +32,7 @@ export default function InventoryDashboard({
   setActiveTab,
   onAddProduct,
   onUpdateProductStock,
-  onAddExpense,
-  currency
+   currency
 }: InventoryDashboardProps) {
 
   // Toast / Status messages
@@ -114,20 +112,7 @@ export default function InventoryDashboard({
 
     onAddProduct(newProduct);
     
-    // Log as Inventory Purchase Expense
-    const expenseCost = costPriceNum * qtyNum;
-    if (expenseCost > 0) {
-      onAddExpense({
-        id: `exp-${Date.now()}`,
-        category: "Inventory Purchase",
-        amount: expenseCost,
-        description: `Procured stock: ${qtyNum}x ${newProdName}`,
-        paymentMethod: "Cash",
-        timestamp: getShopLocalISOString()
-      });
-    }
-
-    triggerToast(`Created product ${newProdName} and recorded purchase!`);
+    triggerToast(`Created product ${newProdName} and updated stock.`);
     
     // Clear state
     setNewProdName("");
@@ -382,7 +367,7 @@ export default function InventoryDashboard({
                 <span>Log Procured Consignment</span>
               </h3>
               <p className="text-xs text-zinc-600 font-bold font-mono">
-                Log newly procured stock batches. This adds items to the SKU levels and generates expense logs automatically.
+                Log newly procured stock batches and update SKU levels. Financial expense entries are managed by the shop owner.
               </p>
             </div>
 
@@ -481,7 +466,7 @@ export default function InventoryDashboard({
                 type="submit"
                 className="w-full py-3 bg-black hover:bg-zinc-800 text-white border-2 border-black rounded-none text-xs font-mono font-black uppercase tracking-wider transition-all cursor-pointer shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]"
               >
-                PROCUR STOCK & LOG INVENTORY EXPENSE
+                PROCURE STOCK & UPDATE INVENTORY
               </button>
             </form>
           </div>
@@ -495,7 +480,7 @@ export default function InventoryDashboard({
             <ul className="list-disc pl-4 space-y-1 text-zinc-700 leading-relaxed font-semibold text-[11px]">
               <li>Upon batch arrival, count and verify barcode/SKU numbers before adding them to the virtual catalog.</li>
               <li>Always enter actual wholesale procurement cost price to track precise gross margin levels on sales charts.</li>
-              <li>Re-log damaged/spoiled stocks under appropriate "Other" or "Spoilage" expense claims on the dashboard ledger.</li>
+              <li>Report damaged or spoiled stock to the shop owner for financial adjustment.</li>
             </ul>
           </div>
 
