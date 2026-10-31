@@ -131,174 +131,18 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
 
     try {
       if (isLogin) {
-        // Try to find a matching staff account in localStorage settings (offline sandbox or cached online stores)
-        let foundStaffMatch = false;
-        let matchedOwnerUid = "";
-        let matchedRole: any = "cashier";
-        let matchedDisplayName = "";
-
-        // A. Check offline sandbox settings
-        const sandboxSettingsStr = typeof window !== "undefined" ? localStorage.getItem("retail_sync_settings") : null;
-        if (sandboxSettingsStr) {
-          try {
-            const sandboxSettings = JSON.parse(sandboxSettingsStr);
-            const staff = sandboxSettings.staffAccounts;
-            if (staff) {
-              if (staff.cashier && staff.cashier.isActive && staff.cashier.email?.toLowerCase() === email.toLowerCase() && staff.cashier.password === password) {
-                foundStaffMatch = true;
-                matchedOwnerUid = "local-demo";
-                matchedRole = "cashier";
-                matchedDisplayName = staff.cashier.username;
-              } else if (staff.inventory && staff.inventory.isActive && staff.inventory.email?.toLowerCase() === email.toLowerCase() && staff.inventory.password === password) {
-                foundStaffMatch = true;
-                matchedOwnerUid = "local-demo";
-                matchedRole = "inventory_manager";
-                matchedDisplayName = staff.inventory.username;
-              }
-            }
-          } catch (e) {
-            console.error("Failed to parse sandbox settings for staff check", e);
-          }
-        }
-
-        // B. Check cached online stores in localStorage
-        if (!foundStaffMatch && typeof window !== "undefined") {
-          try {
-            for (let i = 0; i < localStorage.length; i++) {
-              const key = localStorage.key(i);
-              if (key && key.startsWith("retail_sync_fallback_settings_")) {
-                const ownerUid = key.replace("retail_sync_fallback_settings_", "");
-                const settingsStr = localStorage.getItem(key);
-                if (settingsStr) {
-                  const settingsObj = JSON.parse(settingsStr);
-                  const staff = settingsObj.staffAccounts;
-                  if (staff) {
-                    if (staff.cashier && staff.cashier.isActive && staff.cashier.email?.toLowerCase() === email.toLowerCase() && staff.cashier.password === password) {
-                      foundStaffMatch = true;
-                      matchedOwnerUid = ownerUid;
-                      matchedRole = "cashier";
-                      matchedDisplayName = staff.cashier.username;
-                      break;
-                    } else if (staff.inventory && staff.inventory.isActive && staff.inventory.email?.toLowerCase() === email.toLowerCase() && staff.inventory.password === password) {
-                      foundStaffMatch = true;
-                      matchedOwnerUid = ownerUid;
-                      matchedRole = "inventory_manager";
-                      matchedDisplayName = staff.inventory.username;
-                      break;
-                    }
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            console.error("Failed to parse cached online settings for staff check", e);
-          }
-        }
-
-        // C. Try to query Supabase using the secure verify_staff_login RPC
-if (!foundStaffMatch && supabase) {
-  try {
-    const { data: rpcRes, error: rpcErr } = await supabase.rpc("verify_staff_login", {
-      p_email: email,
-      p_password: password
-    });
-
-    // Check if rpcRes is not null and the success property is true
-    if (!rpcErr && rpcRes && rpcRes.success === true) {
-      foundStaffMatch = true;
-      matchedOwnerUid = rpcRes.ownerUid;
-      matchedRole = rpcRes.role;
-      matchedDisplayName = rpcRes.displayName;
-      
-      console.log("Staff match found via RPC:", matchedDisplayName);
-    } else if (rpcErr) {
-      console.warn("verify_staff_login RPC query returned error, falling back:", rpcErr);
-    }
-  } catch (e) {
-    console.warn("verify_staff_login RPC failed, trying settings query fallback:", e);
-  }
-}
-
-        // D. Fallback: Try to query settings directly if RPC isn't deployed or returned no match (in case they are on a new browser/device and RLS is disabled)
-        if (!foundStaffMatch && supabase) {
-          try {
-            const { data: allSettings } = await supabase
-              .from("settings")
-              .select("*");
-            
-            if (allSettings && allSettings.length > 0) {
-              const match = allSettings.find((row: any) => {
-                const staff = row.staffAccounts;
-                if (!staff) return false;
-                const cashierMatch = staff.cashier && staff.cashier.isActive && staff.cashier.email?.toLowerCase() === email.toLowerCase() && staff.cashier.password === password;
-                const inventoryMatch = staff.inventory && staff.inventory.isActive && staff.inventory.email?.toLowerCase() === email.toLowerCase() && staff.inventory.password === password;
-                return cashierMatch || inventoryMatch;
-              });
-
-              if (match) {
-                const staff = match.staffAccounts;
-                const isCashier = staff.cashier && staff.cashier.email?.toLowerCase() === email.toLowerCase();
-                foundStaffMatch = true;
-                matchedOwnerUid = match.id;
-                matchedRole = isCashier ? "cashier" : "inventory_manager";
-                matchedDisplayName = isCashier ? staff.cashier.username : staff.inventory.username;
-              }
-            }
-          } catch (e) {
-            console.warn("Supabase online settings fallback query failed (possibly RLS enabled):", e);
-          }
-        }
-
-        if (foundStaffMatch) {
-
-    sessionStorage.setItem(
-        "retail_sync_staff_session",
-        JSON.stringify({
-            ownerUid: matchedOwnerUid,
-            role: matchedRole,
-            displayName: matchedDisplayName,
-            email
-        })
-    );
-
-    localStorage.setItem(
-        "retail_sync_operator_role",
-        matchedRole
-    );
-
-    localStorage.setItem(
-        "retail_sync_erp_role",
-        matchedRole
-    );
-
-    // Force a full reload (like the offline/admin bypass does) so AppContext's
-    // one-time auth-monitor effect re-runs and picks up the new staff session
-    // from sessionStorage/localStorage. A soft router.push() here left staff
-    // stuck back on the login screen because currentUser was never populated.
-    window.location.href = "/dashboard";
-
-    return;
-}
-
-        // D. Fall back to standard owner Supabase login if no staff account match is found
-        const { data, error: err } = await supabase.auth.signInWithPassword({
-          email,
-          password
-        });
-        setAppMode("online");
-
-localStorage.removeItem("retail_sync_local_user");
+        // Owners and invited staff authenticate through Supabase Auth.
+        // Online staff credentials are never read from localStorage or legacy RPCs.
+        const { error: err } = await supabase.auth.signInWithPassword({ email, password });
         if (err) throw err;
-
-        // Clear any leftover staff session/role from a previous cashier or
-        // stockist login on this browser, so the real owner isn't locked
-        // into that role.
+        setAppMode("online");
+        localStorage.removeItem("retail_sync_local_user");
         sessionStorage.removeItem("retail_sync_staff_session");
+        sessionStorage.removeItem("staffSession");
         localStorage.removeItem("retail_sync_operator_role");
         localStorage.removeItem("retail_sync_erp_role");
-
         window.location.href = "/dashboard";
-      } else {
+        return;      } else {
         if (!shopName.trim()) {
           setError("Please specify a Shop/Retail Outlet Name.");
           setLoading(false);
