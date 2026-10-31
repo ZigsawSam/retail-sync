@@ -300,8 +300,7 @@ export default function SettingsPage({
               value={selectedStaffId}
               onChange={(e) => {
                 setSelectedStaffId(e.target.value);
-                const s = staff.find((st) => st.id === e.target.value);
-                if (s) setTerminalEmail(`${s.name.toLowerCase().replace(/\s+/g, ".")}@shop.local`);
+
               }}
               className="w-full border rounded px-3 py-2"
             >
