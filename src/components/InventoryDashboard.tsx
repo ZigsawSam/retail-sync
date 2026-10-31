@@ -13,11 +13,9 @@ import {
 } from "lucide-react";
 import { Product, StoreSettings } from "../types";
 import { motion, AnimatePresence } from "motion/react";
-import { getShopLocalISOString } from "../lib/dateUtils";
 
 interface InventoryDashboardProps {
   products: Product[];
-  expenses: Expense[];
   settings: StoreSettings;
   setActiveTab: (tab: string) => void;
   onAddProduct: (prod: Product) => void;
@@ -27,12 +25,11 @@ interface InventoryDashboardProps {
 
 export default function InventoryDashboard({
   products,
-  expenses,
   settings,
   setActiveTab,
   onAddProduct,
   onUpdateProductStock,
-   currency
+  currency
 }: InventoryDashboardProps) {
 
   // Toast / Status messages
