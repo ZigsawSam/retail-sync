@@ -44,10 +44,11 @@ export interface StaffLogin {
   id: string;
   userId: string; // shop owner (Supabase auth user)
   staffId: string; // links to Staff.id
+  authUserId?: string | null; // individual Supabase Auth identity
   name: string;
   role: "cashier" | "inventory_manager";
   email: string | null;
-  password: string; // migrate to hashed later
+  password?: string | null; // legacy field; new Auth accounts never store a password here
   isActive: boolean;
   createdAt: string;
   terminatedAt: string | null;
