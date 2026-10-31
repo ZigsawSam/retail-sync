@@ -10,9 +10,7 @@ import {
   Store,
   ChevronRight,
   LogOut,
-  ShieldCheck,
-  Lock,
-  Unlock
+  ShieldCheck
 } from "lucide-react";
 import { ERPRole } from "../types";
 import { ROUTE_ROLES } from "../lib/rolePermissions";
