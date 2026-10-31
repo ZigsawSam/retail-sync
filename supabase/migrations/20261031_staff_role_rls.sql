@@ -62,16 +62,43 @@ REVOKE ALL ON FUNCTION public.current_staff_role() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.current_staff_owner_id() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.current_staff_role() TO authenticated;
 
--- Products: both staff roles can read. Inventory managers can create/update;
--- no staff role can insert or delete products; inventory managers can change quantity only.
-DROP POLICY IF EXISTS staff_products_read_shop ON public.products;
-CREATE POLICY staff_products_read_shop
-  ON public.products FOR SELECT TO authenticated
-  USING (
-    public.current_staff_owner_id() IS NOT NULL
-    AND public.current_staff_owner_id()::text = "userId"
+CREATE OR REPLACE FUNCTION public.staff_list_products()
+RETURNS SETOF jsonb
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $function$
+  SELECT
+    jsonb_build_object(
+      'id', p.id,
+      'name', p.name,
+      'category', p.category,
+      'quantity', p.quantity,
+      'barcode', p.barcode,
+      'lowStockLimit', p."lowStockLimit",
+      'overstockLimit', p."overstockLimit"
+    )
+    ||
+    CASE
+      WHEN public.current_staff_role() = 'cashier'
+        THEN jsonb_build_object('sellingPrice', p."sellingPrice")
+      ELSE '{}'::jsonb
+    END
+  FROM public.products AS p
+  WHERE p."userId" = public.current_staff_owner_id()::text
     AND public.current_staff_role() IN ('cashier', 'inventory_manager')
-  );
+$function$;
+
+REVOKE ALL ON FUNCTION public.staff_list_products() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.staff_list_products() TO authenticated;
+
+-- Products: staff read role-filtered JSON through staff_list_products().
+-- Inventory managers can change quantity only; staff cannot insert/delete.
+-- Staff cannot SELECT the base products table. Read-only role-filtered data is
+-- exposed through staff_list_products(), which omits cost and pricing fields
+-- that the caller's role is not allowed to see.
+DROP POLICY IF EXISTS staff_products_read_shop ON public.products;
 
 -- Inventory managers cannot create catalog products; catalog administration remains owner-only.
 DROP POLICY IF EXISTS staff_inventory_products_insert ON public.products;
