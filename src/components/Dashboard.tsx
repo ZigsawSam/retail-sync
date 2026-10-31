@@ -118,12 +118,10 @@ export default function Dashboard({
     return (
       <InventoryDashboard 
         products={products}
-        expenses={expenses}
         settings={settings}
         setActiveTab={setActiveTab}
         onAddProduct={onAddProduct}
         onUpdateProductStock={onUpdateProductStock}
-        onAddExpense={onAddExpense}
         currency={settings.currency}
       />
     );
