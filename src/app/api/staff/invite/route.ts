@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     if (existing) return NextResponse.json({ error: "This staff member already has active terminal access." }, { status: 409 });
 
     const { data: invitation, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin,
+      redirectTo: `${(process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\\/$/, "")}/auth/reset-password`,
       data: { display_name: staff.name },
     });
     if (inviteError) throw inviteError;
