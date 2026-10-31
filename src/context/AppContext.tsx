@@ -218,8 +218,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser || !tenantOwnerId) return;
     const userId = tenantOwnerId;
 
+    const productSelect = staffSession?.role === "cashier"
+      ? "id,name,category,sellingPrice,quantity,barcode,lowStockLimit,overstockLimit"
+      : "*";
     const { data: productsData, error: productsError } = await supabase
-      .from("products").select("*").eq("userId", userId);
+      .from("products").select(productSelect).eq("userId", userId);
     if (productsError) setSupabaseError(productsError);
     if (productsData) setProducts(productsData);
 
