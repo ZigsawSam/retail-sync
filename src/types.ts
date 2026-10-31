@@ -48,7 +48,6 @@ export interface StaffLogin {
   name: string;
   role: "cashier" | "inventory_manager";
   email: string | null;
-  password?: string | null; // legacy field; new Auth accounts never store a password here
   isActive: boolean;
   createdAt: string;
   terminatedAt: string | null;
