@@ -29,6 +29,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [verificationSuccessMessage, setVerificationSuccessMessage] = useState<string | null>(null);
   const [resendingEmail, setResendingEmail] = useState(false);
   const [resendStatus, setResendStatus] = useState<string | null>(null);
+  const [passwordResetStatus, setPasswordResetStatus] = useState<string | null>(null);
 
   const handleResendConfirmation = async () => {
     if (!email) {
@@ -51,6 +52,32 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
       setError(parsed.friendlyMessage);
     } finally {
       setResendingEmail(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!email.trim()) {
+      setError("Enter your email address first.");
+      return;
+    }
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setPasswordResetStatus(null);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: `${window.location.origin}/auth/reset-password`,
+      });
+      if (resetError) throw resetError;
+      setPasswordResetStatus("If this address is registered, a password reset link has been sent.");
+    } catch (resetError: any) {
+      setError(parseSupabaseError(resetError).friendlyMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -416,7 +443,15 @@ localStorage.removeItem("retail_sync_local_user");
                   className="w-full pl-10 pr-3 py-2.5 bg-white border-2 border-black text-black rounded-none text-sm font-bold focus:outline-none placeholder-zinc-500"
                 />
               </div>
+              {isLogin && (
+                <div className="mt-2 text-right">
+                  <button type="button" onClick={handlePasswordReset} disabled={loading} className="text-[10px] font-black uppercase underline disabled:opacity-50">
+                    Forgot password?
+                  </button>
+                </div>
+              )}
             </div>
+            {passwordResetStatus && <p className="text-xs font-bold text-emerald-700">{passwordResetStatus}</p>}
 
             {!isLogin && (
               <div className="animate-fadeIn">
