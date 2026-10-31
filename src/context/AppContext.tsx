@@ -239,7 +239,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (staffData) setStaff(staffData);
 
     const { data: loginsData, error: loginsError } = await supabase
-      .from("staff_logins").select("*").eq("userId", userId).order("created_at", { ascending: false });
+      .from("staff_logins").select("*").eq("user_id", userId).order("created_at", { ascending: false });
     if (loginsError) setSupabaseError(loginsError);
     if (loginsData) {
       setStaffLogins(loginsData.map((l: any) => ({
@@ -541,10 +541,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleResetDatabase = async () => {
     if (!currentUser || staffSession) throw new Error("Only the shop owner can reset store data.");
-    const tables = ["products", "customers", "commission_agents", "staff", "staff_logins", "sales", "expenses", "cheques", "electronicTxs"];
+    const tables = ["products", "customers", "commission_agents", "staff", "sales", "expenses", "cheques", "electronicTxs"];
     for (const table of tables) {
-      await supabase.from(table).delete().eq("userId", tenantOwnerId);
+      const { error } = await supabase.from(table).delete().eq("userId", tenantOwnerId);
+      if (error) throw error;
     }
+    const { error: loginsError } = await supabase.from("staff_logins").delete().eq("user_id", tenantOwnerId);
+    if (loginsError) throw loginsError;
     setProducts([]);
     setCustomers([]);
     setCommissionAgents([]);
