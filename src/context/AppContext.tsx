@@ -147,12 +147,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setStaffSession(null);
         setTenantOwnerId(null);
       }
-      setIsLoading(false);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       setCurrentUser(session?.user ?? null);
-      setIsLoading(false);
     });
 
     return () => authListener?.subscription.unsubscribe();
