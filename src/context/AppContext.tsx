@@ -398,6 +398,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser) throw new Error("Not authenticated");
     if (staffSession && staffSession.role !== "inventory_manager") throw new Error("Only inventory managers can update stock.");
     if (!Number.isFinite(quantity) || quantity < 0) throw new Error("Stock quantity must be a non-negative number.");
+
+    if (staffSession) {
+      // Staff cannot SELECT the products base table. Use the narrowly scoped
+      // RPC, which verifies the active role and tenant inside the database.
+      const { data, error } = await supabase.rpc("staff_update_product_stock", {
+        p_product_id: id,
+        p_quantity: quantity,
+      });
+      if (error) throw error;
+      if (data !== true) throw new Error("Product was not found in this shop or stock was not updated.");
+      setProducts((prev) => prev.map((product) => product.id === id ? { ...product, quantity } : product));
+      return;
+    }
+
     await handleUpdateProduct(id, { quantity });
   };
 
