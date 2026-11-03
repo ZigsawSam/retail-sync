@@ -42,6 +42,7 @@ interface AppContextType {
   operatorRole: ERPRole;
   cashInHand: number;
   currency: string;
+  currencyCode: string;
   setCurrency: (currency: string) => void;
   supabaseError: any;
   setSupabaseError: (error: any) => void;
@@ -717,7 +718,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!staffSession) setSelectedRole(role);
   };
   const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
-  const currency = currencyOverride || settings.currency || "INR";
+  const currencyCode = currencyOverride || (settings.currency && /^[A-Z]{3}$/.test(settings.currency) ? settings.currency : "INR");
+  const currency = (() => {
+    try { return new Intl.NumberFormat("en", { style: "currency", currency: currencyCode }).formatToParts(0).find((part) => part.type === "currency")?.value || currencyCode; }
+    catch { return currencyCode; }
+  })();
 
   const lowStockProducts = products.filter((p) => p.quantity <= p.lowStockLimit);
   const overstockProducts = products.filter((p) => p.quantity >= p.overstockLimit);
@@ -733,6 +738,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         operatorRole,
         cashInHand,
         currency,
+        currencyCode,
         setCurrency,
         supabaseError,
         setSupabaseError,
