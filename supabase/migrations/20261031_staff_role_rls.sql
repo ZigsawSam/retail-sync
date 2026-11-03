@@ -162,6 +162,46 @@ CREATE TRIGGER enforce_staff_product_update_columns
   FOR EACH ROW
   EXECUTE FUNCTION public.enforce_staff_product_update_columns();
 
+-- Inventory stock changes use a narrow RPC rather than direct table access.
+-- This avoids requiring staff SELECT privileges on the products base table.
+CREATE OR REPLACE FUNCTION public.staff_update_product_stock(
+  p_product_id text,
+  p_quantity numeric
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $function$
+DECLARE
+  affected_rows integer;
+  owner_id uuid;
+BEGIN
+  owner_id := public.current_staff_owner_id();
+
+  IF auth.uid() IS NULL
+     OR owner_id IS NULL
+     OR public.current_staff_role() <> 'inventory_manager' THEN
+    RAISE EXCEPTION 'Only an active inventory manager can update stock';
+  END IF;
+
+  IF p_quantity IS NULL OR p_quantity < 0 THEN
+    RAISE EXCEPTION 'Stock quantity must be a non-negative number';
+  END IF;
+
+  UPDATE public.products AS p
+  SET quantity = p_quantity
+  WHERE p.id::text = p_product_id
+    AND p."userId" = owner_id::text;
+
+  GET DIAGNOSTICS affected_rows = ROW_COUNT;
+  RETURN affected_rows = 1;
+END
+$function$;
+
+REVOKE ALL ON FUNCTION public.staff_update_product_stock(text, numeric) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.staff_update_product_stock(text, numeric) TO authenticated;
+
 -- Customers: both roles can read; cashiers can create records. Neither staff
 -- role can update/delete existing customer records in this initial policy set.
 DROP POLICY IF EXISTS staff_customers_read_shop ON public.customers;
