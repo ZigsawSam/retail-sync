@@ -505,6 +505,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleAddSale = async (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => {
     if (!currentUser) throw new Error("Not authenticated");
+    if (staffSession && staffSession.role !== "cashier") throw new Error("Only cashiers can create sales.");
 
     const audit = getAuditFields();
     const newSale = {
