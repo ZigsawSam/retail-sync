@@ -227,6 +227,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCheques([]);
       setElectronicTxs([]);
       setActualDrawerCash(null);
+      setStaffExpensesTotal(0);
       setSettings({ shopName: "My Shop", taxRate: 5, currency: "Rs", startingBalance: 0 });
       try {
         const [{ data: ownerData, error: ownerError }, { data: roleData, error: roleError }] = await Promise.all([
