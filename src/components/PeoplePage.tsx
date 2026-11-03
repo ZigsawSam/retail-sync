@@ -53,10 +53,6 @@ export default function PeoplePage({
   const [paymentType, setPaymentType] = useState<"Monthly fixed" | "Daily wage" | "Hourly">("Monthly fixed");
   const [rate, setRate] = useState("");
 
-  // Account Type filter state for terminal onboarding
-  const [accountType, setAccountType] = useState<"normal" | "cashier" | "stockist">("normal");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
 
   // Payout form states
   const [selectedStaffId, setSelectedStaffId] = useState("");
@@ -81,67 +77,16 @@ export default function PeoplePage({
     return "e.g., 18";
   }, [paymentType]);
 
-  // Handle staff onboarding submission
+  // Employee records are separate from authenticated terminal access.
   const handleOnboardSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !rate) return;
-
-    if ((accountType === "cashier" || accountType === "stockist") && (!email || !password)) {
-      alert("Please enter both Email and Password to register terminal operator account!");
-      return;
-    }
-
-    const customRole = accountType === "cashier" ? "Cashier" : (accountType === "stockist" ? "Stockist" : role);
-
-    const newStaff: Staff = {
-      id: "staff-" + Date.now(),
-      name,
-      phone,
-      role: customRole,
-      paymentType,
-      rate: parseFloat(rate),
-      attendance: {}
-    };
-
+    if (!name.trim() || !phone.trim() || !rate || !Number.isFinite(Number(rate)) || Number(rate) < 0) return;
+    const newStaff: Staff = { id: "staff-" + Date.now(), name: name.trim(), phone: phone.trim(), role: role.trim(), paymentType, rate: Number(rate), attendance: {} };
     onOnboardStaff(newStaff);
-
-    // Save terminal credentials in settings
-    if ((accountType === "cashier" || accountType === "stockist") && onUpdateSettings && settings) {
-      const updatedAccounts = { ...settings.staffAccounts };
-      if (accountType === "cashier") {
-        updatedAccounts.cashier = {
-          username: name,
-          email: email,
-          password: password,
-          isActive: true
-        };
-      } else {
-        updatedAccounts.inventory = {
-          username: name,
-          email: email,
-          password: password,
-          isActive: true
-        };
-      }
-      onUpdateSettings({
-        ...settings,
-        staffAccounts: updatedAccounts
-      });
-    }
-    
-    // reset form
-    setName("");
-    setPhone("");
-    setRole("Sales Associate");
-    setPaymentType("Monthly fixed");
-    setRate("");
-    setAccountType("normal");
-    setEmail("");
-    setPassword("");
+    setName(""); setPhone(""); setRole("Sales Associate"); setPaymentType("Monthly fixed"); setRate("");
     setShowOnboardModal(false);
-    alert(`Success! Onboarded ${name} as a ${accountType === "normal" ? "Normal Staff" : accountType.toUpperCase()} member.`);
+    alert("Staff record created. To grant system access, send an invitation from Settings.");
   };
-
   // Log attendance for specific staff member
   const handleAttendanceChange = (member: Staff, present: boolean) => {
     let hoursWorked = undefined;
@@ -445,7 +390,8 @@ export default function PeoplePage({
               </div>
 
               <form onSubmit={handleOnboardSubmit} className="space-y-4">
-                {/* Account Type Selection */}
+                <p className="text-xs text-zinc-600 font-mono">Create the employee record here. Invite cashier or inventory-manager access separately from Settings using the employee email address.</p>
+
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5 flex items-center gap-1">
                     <Shield className="w-3.5 h-3.5 text-black" />
@@ -517,38 +463,6 @@ export default function PeoplePage({
                   />
                 </div>
 
-                {/* Email and Password Registration for Cashier/Stockist */}
-                {(accountType === "cashier" || accountType === "stockist") && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-[#FEF9E7] p-3 border-2 border-dashed border-black">
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1">
-                        Login Email / User
-                      </label>
-                      <input 
-                        type="email" 
-                        required
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="w-full px-2.5 py-2 bg-white border-2 border-black text-black rounded-none text-xs font-bold focus:outline-none font-mono"
-                        placeholder="e.g. cashier@shop.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1">
-                        System Password
-                      </label>
-                      <input 
-                        type="password" 
-                        required
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="w-full px-2.5 py-2 bg-white border-2 border-black text-black rounded-none text-xs font-bold focus:outline-none font-mono"
-                        placeholder="Set password..."
-                      />
-                    </div>
-                  </div>
-                )}
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5 flex items-center gap-1">
@@ -573,7 +487,6 @@ export default function PeoplePage({
                     <input 
                       type="text" 
                       required
-                      disabled={accountType !== "normal"}
                       value={role}
                       onChange={(e) => setRole(e.target.value)}
                       className="w-full px-3 py-2.5 bg-white disabled:bg-zinc-100 border-2 border-black text-black disabled:text-zinc-500 rounded-none text-sm font-bold focus:outline-none placeholder-zinc-500"
