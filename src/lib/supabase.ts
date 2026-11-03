@@ -430,6 +430,17 @@ export const transferMockDataToSupabase = async (userId: string): Promise<{ succ
   }
 
   try {
+    // This helper is for first-time shop-owner initialization only. Never allow
+    // a staff Auth session to seed or upsert the owner's settings row.
+    const { data: authData, error: authError } = await supabase.auth.getUser();
+    if (authError) throw authError;
+    if (!authData.user || authData.user.id !== userId) {
+      return {
+        success: false,
+        message: "Shop initialization is restricted to the authenticated shop owner. Staff accounts cannot initialize or modify shop settings."
+      };
+    }
+
     // 1. Seed settings (check if settings already exist to preserve custom registered shop name/currency)
     const { data: existingSettings } = await supabase
       .from("settings")
