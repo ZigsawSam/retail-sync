@@ -139,21 +139,52 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [actualDrawerCash, setActualDrawerCash] = useState<number | null>(null);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
-  // Auth listener: owner and staff both use Supabase Auth.
+  // Auth initialization: always release the startup screen when there is no
+  // session or when Supabase cannot restore one. Authenticated identities stay
+  // in the loading state until the tenant/role resolution effect completes.
   useEffect(() => {
+    let active = true;
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setCurrentUser(session?.user ?? null);
-      if (!session?.user) {
+      if (!active) return;
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) {
+        setIsLoading(true);
+      } else {
         setStaffSession(null);
         setTenantOwnerId(null);
+        setIsLoading(false);
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUser(session?.user ?? null);
-    });
+    const restoreSession = async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!active) return;
+        const user = data.session?.user ?? null;
+        setCurrentUser(user);
+        if (!user) {
+          setStaffSession(null);
+          setTenantOwnerId(null);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Unable to restore Supabase session:", error);
+        if (!active) return;
+        setCurrentUser(null);
+        setStaffSession(null);
+        setTenantOwnerId(null);
+        setSupabaseError(error);
+        setIsLoading(false);
+      }
+    };
 
-    return () => authListener?.subscription.unsubscribe();
+    void restoreSession();
+    return () => {
+      active = false;
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
   // Resolve a staff Auth identity to its shop tenant using database-owned helpers.
@@ -164,6 +195,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (!currentUser) {
         setTenantOwnerId(null);
         setStaffSession(null);
+        setIsLoading(false);
         return;
       }
       setIsLoading(true);
