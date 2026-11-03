@@ -36,6 +36,7 @@ export interface Staff {
   paymentType: "Monthly fixed" | "Daily wage" | "Hourly";
   rate: number; // monthly fixed salary, daily rate, or hourly rate
   attendance: Record<string, { present: boolean; hoursWorked?: number; wageEarned?: number }>;
+  archived_at?: string | null;
 }
 
 // Staff login record (lives in DB, has history)
