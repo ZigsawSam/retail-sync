@@ -23,7 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setSupabaseError
   } = useApp();
 
-  const [errorBannerExpanded, setErrorBannerExpanded] = useState(false);\n
+  const [errorBannerExpanded, setErrorBannerExpanded] = useState(false);
   const currencyOptions = (() => {
     const intlWithCurrencies = Intl as typeof Intl & { supportedValuesOf?: (key: "currency") => string[] };
     const codes = intlWithCurrencies.supportedValuesOf?.("currency") || [
