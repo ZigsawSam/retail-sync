@@ -90,6 +90,8 @@ interface AppContextType {
   handleAddStaff: (staff: Omit<Staff, "id" | "attendance">) => Promise<void>;
   handleUpdateStaff: (id: string, updates: Partial<Staff>) => Promise<void>;
   handleDeleteStaff: (id: string) => Promise<void>;
+  handleArchiveStaff: (id: string) => Promise<void>;
+  handleRestoreStaff: (id: string) => Promise<void>;
   handleMarkAttendance: (staffId: string, date: string, present: boolean, hoursWorked?: number) => Promise<void>;
 
   handleAddSale: (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => Promise<void>;
@@ -551,12 +553,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setStaff((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   };
 
-  const handleDeleteStaff = async (id: string) => {
-    if (staffSession) throw new Error("Staff accounts cannot manage staff records.");
-    const { error } = await supabase.from("staff").delete().eq("id", id);
-    if (error) throw error;
-    setStaff((prev) => prev.filter((s) => s.id !== id));
+  const manageStaffRecord = async (id: string, action: "archive" | "restore" | "delete") => {
+    if (staffSession || !currentUser) throw new Error("Only the shop owner can manage staff records.");
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session?.access_token) throw new Error("Your owner session has expired. Please sign in again.");
+    const response = await fetch("/api/staff/manage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session.access_token}` },
+      body: JSON.stringify({ staffId: id, action }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Unable to update staff record.");
+    if (action === "delete") setStaff((prev) => prev.filter((s) => s.id !== id));
+    else if (action === "archive") setStaff((prev) => prev.map((s: any) => s.id === id ? { ...s, archived_at: new Date().toISOString() } : s));
+    else setStaff((prev) => prev.map((s: any) => s.id === id ? { ...s, archived_at: null } : s));
   };
+
+  const handleArchiveStaff = (id: string) => manageStaffRecord(id, "archive");
+  const handleRestoreStaff = (id: string) => manageStaffRecord(id, "restore");
+  const handleDeleteStaff = (id: string) => manageStaffRecord(id, "delete");
 
   const handleMarkAttendance = async (staffId: string, date: string, present: boolean, hoursWorked?: number) => {
     if (staffSession) throw new Error("Staff accounts cannot manage attendance.");
@@ -795,6 +810,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleAddStaff,
         handleUpdateStaff,
         handleDeleteStaff,
+        handleArchiveStaff,
+        handleRestoreStaff,
         handleMarkAttendance,
         handleAddSale,
         handleUpdateSale,
