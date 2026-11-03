@@ -13,6 +13,11 @@ export default function DashboardPageRoute() {
     router.push(`/${tab}`);
   };
 
+  const handleDashboardUpdateSale = (sale: import("../../types").Sale) => {
+    const { id, ...updates } = sale;
+    void context.handleUpdateSale(id, updates);
+  };
+
   return (
     <Dashboard 
       products={context.products}
@@ -31,7 +36,7 @@ export default function DashboardPageRoute() {
       actualDrawerCash={context.actualDrawerCash}
       onUpdateActualDrawerCash={context.handleUpdateActualDrawerCash}
       onAddSale={context.handleAddSale}
-      onUpdateSale={context.handleUpdateSale}
+      onUpdateSale={handleDashboardUpdateSale}
       customers={context.customers}
       onAddCustomer={context.handleAddCustomer}
       showInvoiceForm={context.showInvoiceForm}
