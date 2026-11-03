@@ -392,62 +392,7 @@ export default function PeoplePage({
               <form onSubmit={handleOnboardSubmit} className="space-y-4">
                 <p className="text-xs text-zinc-600 font-mono">Create the employee record here. Invite cashier or inventory-manager access separately from Settings using the employee email address.</p>
 
-                <div>
-                  <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5 flex items-center gap-1">
-                    <Shield className="w-3.5 h-3.5 text-black" />
-                    <span>Staff Account Type</span>
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAccountType("normal");
-                        setRole("Sales Associate");
-                      }}
-                      className={`py-2 px-1 text-[10px] font-black uppercase border-2 border-black transition-all rounded-none cursor-pointer text-center ${
-                        accountType === "normal"
-                          ? "bg-[#FFC300] text-black shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                          : "bg-white text-zinc-700 hover:bg-zinc-50 animate-none"
-                      }`}
-                    >
-                      Normal Staff
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAccountType("cashier");
-                        setRole("Cashier");
-                      }}
-                      className={`py-2 px-1 text-[10px] font-black uppercase border-2 border-black transition-all rounded-none cursor-pointer text-center ${
-                        accountType === "cashier"
-                          ? "bg-[#0055A5] text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                          : "bg-white text-zinc-700 hover:bg-zinc-50 animate-none"
-                      }`}
-                    >
-                      Cashier
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAccountType("stockist");
-                        setRole("Stockist Room Manager");
-                      }}
-                      className={`py-2 px-1 text-[10px] font-black uppercase border-2 border-black transition-all rounded-none cursor-pointer text-center ${
-                        accountType === "stockist"
-                          ? "bg-[#D63031] text-white shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]"
-                          : "bg-white text-zinc-700 hover:bg-zinc-50 animate-none"
-                      }`}
-                    >
-                      Stockist
-                    </button>
-                  </div>
-                  <p className="text-[9px] text-zinc-500 font-mono mt-1 uppercase">
-                    {accountType === "normal" && "Onboard standard store staff without system access login."}
-                    {accountType === "cashier" && "Registers terminal access credentials for cashier workspace."}
-                    {accountType === "stockist" && "Registers terminal access credentials for stock/inventory room."}
-                  </p>
-                </div>
-
+                <p className="text-xs text-zinc-600 font-mono">Create the employee record here. Invite cashier or inventory-manager access separately from Settings using the employee email address.</p>
                 <div>
                   <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5 flex items-center gap-1">
                     <User className="w-3.5 h-3.5 text-black" />
