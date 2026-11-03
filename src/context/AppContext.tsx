@@ -42,6 +42,7 @@ interface AppContextType {
   operatorRole: ERPRole;
   cashInHand: number;
   currency: string;
+  setCurrency: (currency: string) => void;
   supabaseError: any;
   setSupabaseError: (error: any) => void;
   handleRoleChange: (role: ERPRole) => void;
@@ -120,6 +121,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<ERPRole>("admin");
   const [supabaseError, setSupabaseError] = useState<any>(null);
+  const [currencyOverride, setCurrencyOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("retail_sync_display_currency");
+      if (saved && /^[A-Z]{3}$/.test(saved)) setCurrencyOverride(saved);
+    } catch { /* Storage may be unavailable; use the shop default. */ }
+  }, []);
+
+  const setCurrency = useCallback((nextCurrency: string) => {
+    if (!/^[A-Z]{3}$/.test(nextCurrency)) return;
+    setCurrencyOverride(nextCurrency);
+    try { window.localStorage.setItem("retail_sync_display_currency", nextCurrency); } catch { /* Keep in-memory selection. */ }
+  }, []);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -702,7 +717,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!staffSession) setSelectedRole(role);
   };
   const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
-  const currency = settings.currency || "Rs";
+  const currency = currencyOverride || settings.currency || "INR";
 
   const lowStockProducts = products.filter((p) => p.quantity <= p.lowStockLimit);
   const overstockProducts = products.filter((p) => p.quantity >= p.overstockLimit);
@@ -718,6 +733,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         operatorRole,
         cashInHand,
         currency,
+        setCurrency,
         supabaseError,
         setSupabaseError,
         handleRoleChange,
