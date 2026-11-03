@@ -49,19 +49,31 @@ export async function POST(request: NextRequest) {
         .select("id").eq("user_id", ownerId).eq("staff_id", staffId).limit(1);
       if (loginError) throw loginError;
       if (loginRows?.length) return NextResponse.json({ error: "Permanent deletion is blocked because current or historical terminal-access records are linked. Keep this employee archived to preserve the audit trail." }, { status: 409 });
+      const { data: salaryRows, error: salaryError } = await admin.from("expenses")
+        .select("id").eq("userId", ownerId).eq("category", "Staff Salary").ilike("description", `%${staff.name}%`).limit(1);
+      if (salaryError) throw salaryError;
+      if (salaryRows?.length) return NextResponse.json({ error: "Permanent deletion is blocked because salary-payment records refer to this employee. Keep the employee archived to preserve payroll history." }, { status: 409 });
       const { error: deleteError } = await admin.from("staff").delete().eq("id", staffId).eq("userId", ownerId);
       if (deleteError) throw deleteError;
       return NextResponse.json({ success: true, message: "Employee record permanently deleted." });
     }
 
     if (action === "archive") {
-      const { error: loginError } = await admin.from("staff_logins")
+      const { data: terminatedRows, error: loginError } = await admin.from("staff_logins")
         .update({ is_active: false, terminated_at: new Date().toISOString() })
-        .eq("user_id", ownerId).eq("staff_id", staffId).eq("is_active", true);
+        .eq("user_id", ownerId).eq("staff_id", staffId).eq("is_active", true).select("id");
       if (loginError) throw loginError;
       const { error: archiveError } = await admin.from("staff").update({ archived_at: new Date().toISOString() })
         .eq("id", staffId).eq("userId", ownerId);
-      if (archiveError) throw archiveError;
+      if (archiveError) {
+        if (terminatedRows?.length) {
+          const { error: rollbackError } = await admin.from("staff_logins")
+            .update({ is_active: true, terminated_at: null })
+            .in("id", terminatedRows.map((row: any) => row.id)).eq("user_id", ownerId);
+          if (rollbackError) console.error("Staff archive rollback failed:", rollbackError);
+        }
+        throw archiveError;
+      }
       return NextResponse.json({ success: true, message: "Employee archived and active terminal access terminated." });
     }
 
