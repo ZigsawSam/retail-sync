@@ -130,7 +130,7 @@ export default function SettingsPage({
   };
 
   const availableStaff = staff.filter(
-    (s) => !activeLogins.some((l) => l.staffId === s.id)
+    (s) => !s.archived_at && !activeLogins.some((l) => l.staffId === s.id)
   );
 
   return (
@@ -250,7 +250,7 @@ export default function SettingsPage({
           <p className="text-gray-500">No staff onboarded yet. Add staff in the Staff Management section.</p>
         ) : (
           <div className="space-y-2">
-            {staff.map((s) => {
+            {staff.filter((s) => !s.archived_at).map((s) => {
               const login = activeLogins.find((l) => l.staffId === s.id);
               return (
                 <div key={s.id} className="flex items-center justify-between border rounded p-3">
