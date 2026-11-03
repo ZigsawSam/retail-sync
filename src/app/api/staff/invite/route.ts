@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
     const staffId = typeof body.staffId === "string" ? body.staffId.trim() : "";
     const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
     const role = body.role;
-    if (!staffId || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email) || !["cashier", "inventory_manager"].includes(role)) {
+    if (!staffId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !["cashier", "inventory_manager"].includes(role)) {
       return NextResponse.json({ error: "Provide a staff member, valid email address, and supported role." }, { status: 400 });
     }
 
@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
     if (existing) return NextResponse.json({ error: "This staff member already has active terminal access." }, { status: 409 });
 
     const { data: invitation, error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-      redirectTo: `${(process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\\/$/, "")}/auth/reset-password`,
+      redirectTo: `${(process.env.NEXT_PUBLIC_SITE_URL || request.nextUrl.origin).replace(/\/$/, "")}/auth/reset-password`,
       data: { display_name: staff.name },
     });
     if (inviteError) throw inviteError;
