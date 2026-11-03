@@ -24,6 +24,9 @@ interface PeoplePageProps {
   onOnboardStaff: (newStaff: Staff) => void;
   onLogAttendance: (staffId: string, date: string, present: boolean, hoursWorked?: number, wageEarned?: number) => void;
   onAddExpense: (expense: Expense) => void;
+  onArchiveStaff: (id: string) => Promise<void>;
+  onRestoreStaff: (id: string) => Promise<void>;
+  onDeleteStaff: (id: string) => Promise<void>;
   settings?: any;
   onUpdateSettings?: (settings: any) => void;
 }
@@ -35,9 +38,33 @@ export default function PeoplePage({
   onOnboardStaff,
   onLogAttendance,
   onAddExpense,
+  onArchiveStaff,
+  onRestoreStaff,
+  onDeleteStaff,
   settings,
   onUpdateSettings
 }: PeoplePageProps) {
+  const activeStaff = staff.filter((member) => !member.archived_at);
+  const archivedStaff = staff.filter((member) => !!member.archived_at);
+  const [staffActionMessage, setStaffActionMessage] = useState("");
+
+  const archiveMember = async (member: Staff) => {
+    if (!confirm(`Archive ${member.name}? They will leave the active staff list and any active terminal access will be terminated. Attendance and payroll history will be kept.`)) return;
+    try { await onArchiveStaff(member.id); setStaffActionMessage(`${member.name} archived. History retained.`); }
+    catch (error: any) { setStaffActionMessage(error?.message || "Unable to archive staff member."); }
+  };
+
+  const restoreMember = async (member: Staff) => {
+    try { await onRestoreStaff(member.id); setStaffActionMessage(`${member.name} restored to active staff.`); }
+    catch (error: any) { setStaffActionMessage(error?.message || "Unable to restore staff member."); }
+  };
+
+  const permanentlyDeleteMember = async (member: Staff) => {
+    if (!confirm(`PERMANENTLY DELETE ${member.name}? This cannot be undone. Deletion is allowed only when no attendance or terminal-access history is linked.`)) return;
+    try { await onDeleteStaff(member.id); setStaffActionMessage(`${member.name} permanently deleted.`); }
+    catch (error: any) { setStaffActionMessage(error?.message || "Unable to permanently delete staff member."); }
+  };
+
   // Current date
   const TODAY_STR = "2026-07-14";
   const [selectedDate, setSelectedDate] = useState(TODAY_STR);
@@ -225,7 +252,7 @@ export default function PeoplePage({
             </div>
 
             <div className="space-y-4">
-              {staff.length === 0 ? (
+              {activeStaff.length === 0 ? (
                 <div className="text-center py-12 text-zinc-600 bg-[#F5F2EB] border-2 border-black rounded-none">
                   <p className="text-sm font-black font-mono">No staff members onboarded yet.</p>
                   <button 
@@ -236,7 +263,7 @@ export default function PeoplePage({
                   </button>
                 </div>
               ) : (
-                staff.map((member) => {
+                activeStaff.map((member) => {
                   const record = member.attendance[selectedDate];
                   const isPresent = record?.present === true;
                   const isAbsent = record?.present === false;
@@ -268,6 +295,12 @@ export default function PeoplePage({
                         </div>
                       </div>
 
+                      {/* Staff actions */}
+                      <div className="flex flex-wrap items-center gap-2 self-end md:self-auto shrink-0">
+                        <button onClick={() => void archiveMember(member)} className="px-3 py-2 text-xs font-black border-2 border-black bg-white hover:bg-[#FCE8E6] text-black">
+                          ARCHIVE STAFF
+                        </button>
+                      </div>
                       {/* Right-aligned Actions Group: Includes Hourly Tracker, Day's Pay, and Toggle Buttons unified */}
                       <div className="flex flex-wrap items-center gap-4 self-end md:self-auto shrink-0">
                         {/* Hourly Tracker (Only for Hourly Staff) */}
@@ -368,6 +401,30 @@ export default function PeoplePage({
         </div>
 
       </div>
+
+      {/* Archived staff records */}
+      {staffActionMessage && <p className="mb-4 border-2 border-black bg-white p-3 text-sm font-bold">{staffActionMessage}</p>}
+      {archivedStaff.length > 0 && (
+        <section className="mt-8 bg-white p-6 border-3 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <h3 className="font-black uppercase text-base border-b-2 border-black pb-3 mb-4">Archived Staff · History Preserved</h3>
+          <div className="space-y-3">
+            {archivedStaff.map((member) => (
+              <div key={member.id} className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-2 border-black p-3">
+                <div>
+                  <p className="font-black text-sm">{member.name}</p>
+                  <p className="text-xs text-zinc-700 font-mono">{member.role} · Archived {member.archived_at ? new Date(member.archived_at).toLocaleDateString() : ""}</p>
+                  <p className="text-xs text-zinc-600">Attendance and payroll data retained</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={() => void restoreMember(member)} className="px-3 py-2 text-xs font-black border-2 border-black bg-white hover:bg-zinc-100">RESTORE</button>
+                  <button onClick={() => void permanentlyDeleteMember(member)} className="px-3 py-2 text-xs font-black border-2 border-black bg-[#FCE8E6] hover:bg-[#F5C6C6]">PERMANENT DELETE</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-zinc-600">Permanent deletion is intentionally blocked when attendance or terminal-access history exists. Keep those records archived to preserve the audit trail.</p>
+        </section>
+      )}
 
       {/* STAFF ONBOARDING MODAL */}
       <AnimatePresence>
