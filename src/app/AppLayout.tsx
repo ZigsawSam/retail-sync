@@ -7,6 +7,7 @@ import AuthPage from "../components/AuthPage";
 import RoleGuard from "../components/RoleGuard";
 import { usePathname, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
+import { ArrowLeftRight, X } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const {
@@ -16,23 +17,51 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
      settings,
     cashInHand,
     currency,
-    currencyCode,
-    setCurrency,
     handleLogout,
     supabaseError,
     setSupabaseError
   } = useApp();
 
   const [errorBannerExpanded, setErrorBannerExpanded] = useState(false);
-  const currencyOptions = (() => {
-    const intlWithCurrencies = Intl as typeof Intl & { supportedValuesOf?: (key: "currency") => string[] };
-    const codes = intlWithCurrencies.supportedValuesOf?.("currency") || [
-      "AED","AFN","ALL","AMD","ANG","AOA","ARS","AUD","AWG","AZN"," BAM","BBD","BDT","BGN","BHD","BIF","BMD","BND","BOB","BRL","BSD","BTN","BWP","BYN","BZD","CAD","CDF","CHF","CLP","CNY","COP","CRC","CUP","CVE","CZK","DJF","DKK","DOP","DZD","EGP","ERN","ETB","EUR","FJD","GBP","GEL","GHS","GIP","GMD","GNF","GTQ","GYD","HKD","HNL","HRK","HTG","HUF","IDR","ILS","INR","IQD","IRR","ISK","JMD","JOD","JPY","KES","KGS","KHR","KMF","KRW","KWD","KYD","KZT","LAK","LBP","LKR","LRD","LSL","LYD","MAD","MDL","MGA","MKD","MMK","MNT","MOP","MRU","MUR","MVR","MWK","MXN","MYR","MZN","NAD","NGN","NIO","NOK","NPR","NZD","OMR","PAB","PEN","PGK","PHP","PKR","PLN","PYG","QAR","RON","RSD","RUB","RWF","SAR","SBD","SCR","SDG","SEK","SGD","SLL","SOS","SRD","SSP","STN","SYP","SZL","THB","TJS","TMT","TND","TOP","TRY","TTD","TWD","TZS","UAH","UGX","USD","UYU","UZS","VES","VND","VUV","WST","XAF","XCD","XOF","XPF","YER","ZAR","ZMW","ZWL"
-    ].map((code) => code.trim());
-    const names = new Intl.DisplayNames(["en"], { type: "currency" });
-    return [...new Set(codes)].sort().map((code) => ({ code, name: names.of(code) || code }));
-  })();
+  const [converterOpen, setConverterOpen] = useState(false);
+  const [amount, setAmount] = useState("1");
+  const [fromCurrency, setFromCurrency] = useState("USD");
+  const [toCurrency, setToCurrency] = useState("INR");
+  const [rates, setRates] = useState<Record<string, number> | null>(null);
+  const [rateDate, setRateDate] = useState("");
+  const [rateLoading, setRateLoading] = useState(false);
+  const [rateError, setRateError] = useState("");
 
+  const currencyCodes = (() => {
+    const intl = Intl as typeof Intl & { supportedValuesOf?: (key: "currency") => string[] };
+    return (intl.supportedValuesOf?.("currency") || ["AED","AUD","BDT","CAD","CNY","EUR","GBP","INR","JPY","NZD","PKR","SAR","SGD","USD","ZAR"])
+      .filter((code) => /^[A-Z]{3}$/.test(code)).sort();
+  })();
+  const currencyNames = new Intl.DisplayNames(["en"], { type: "currency" });
+  const formatCurrency = (value: number, code: string) => new Intl.NumberFormat("en", { style: "currency", currency: code, maximumFractionDigits: 2 }).format(value);
+
+  useEffect(() => {
+    if (!converterOpen) return;
+    const controller = new AbortController();
+    setRateLoading(true);
+    setRateError("");
+    fetch(`https://open.er-api.com/v6/latest/${fromCurrency}`, { signal: controller.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Exchange-rate service is unavailable.");
+        return response.json();
+      })
+      .then((data) => {
+        if (data.result !== "success" || !data.rates) throw new Error("Could not retrieve exchange rates.");
+        setRates(data.rates);
+        setRateDate(data.time_last_update_utc || "");
+      })
+      .catch((error) => {
+        if (error.name !== "AbortError") setRateError(error.message || "Unable to load exchange rates.");
+      })
+      .finally(() => { if (!controller.signal.aborted) setRateLoading(false); });
+    return () => controller.abort();
+  }, [converterOpen, fromCurrency]);
+  const convertedAmount = rates && Number.isFinite(Number(amount)) ? Number(amount || 0) * (rates[toCurrency] || 0) : null;
 
   const pathname = usePathname();
   const router = useRouter();
@@ -112,19 +141,42 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* Dynamic Viewport */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
         <header className="h-14 shrink-0 bg-white border-b-2 border-black px-4 md:px-6 flex items-center justify-end gap-3">
-          <label htmlFor="display-currency" className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Display currency</label>
-          <select
-            id="display-currency"
-            value={currencyCode}
-            onChange={(event) => setCurrency(event.target.value)}
-            aria-label="Choose display currency"
-            className="max-w-[min(72vw,340px)] border-2 border-black bg-[#FFC300] px-3 py-2 text-xs font-black uppercase shadow-[3px_3px_0px_0px_#000000] outline-none focus:ring-2 focus:ring-black"
-          >
-            {currencyOptions.map(({ code, name }) => (
-              <option key={code} value={code}>{name} ({code})</option>
-            ))}
-          </select>
+          <button type="button" onClick={() => setConverterOpen(true)} className="inline-flex items-center gap-2 border-2 border-black bg-[#FFC300] px-3 py-2 text-xs font-black uppercase shadow-[3px_3px_0px_0px_#000000] hover:translate-y-[-1px]">
+            <ArrowLeftRight className="h-4 w-4" /> Currency converter
+          </button>
         </header>
+        {converterOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true" aria-labelledby="currency-converter-title">
+            <div className="w-full max-w-lg border-4 border-black bg-[#FAF8F5] p-5 shadow-[8px_8px_0_0_#000]">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 id="currency-converter-title" className="text-lg font-black uppercase">Currency converter</h2>
+                <button type="button" onClick={() => setConverterOpen(false)} aria-label="Close converter" className="border-2 border-black bg-white p-2"><X className="h-4 w-4" /></button>
+              </div>
+              <label className="mb-2 block text-[10px] font-black uppercase">Amount</label>
+              <input type="number" min="0" step="any" value={amount} onChange={(event) => setAmount(event.target.value)} className="mb-4 w-full border-2 border-black bg-white p-3 text-lg font-bold" />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div><label className="mb-2 block text-[10px] font-black uppercase">From</label>
+                  <select value={fromCurrency} onChange={(event) => setFromCurrency(event.target.value)} className="w-full border-2 border-black bg-white p-3 text-sm font-bold">
+                    {currencyCodes.map((code) => <option key={code} value={code}>{currencyNames.of(code) || code} ({code})</option>)}
+                  </select>
+                </div>
+                <div><label className="mb-2 block text-[10px] font-black uppercase">To</label>
+                  <select value={toCurrency} onChange={(event) => setToCurrency(event.target.value)} className="w-full border-2 border-black bg-white p-3 text-sm font-bold">
+                    {currencyCodes.map((code) => <option key={code} value={code}>{currencyNames.of(code) || code} ({code})</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="mt-5 border-2 border-black bg-[#FFC300] p-4">
+                <p className="text-[10px] font-black uppercase">Converted amount</p>
+                <p className="mt-1 break-words text-2xl font-black">{rateLoading ? "Loading rate…" : convertedAmount === null ? "—" : formatCurrency(convertedAmount, toCurrency)}</p>
+                {rates && <p className="mt-2 text-[10px] font-bold">1 {fromCurrency} = {(rates[toCurrency] || 0).toLocaleString("en", { maximumFractionDigits: 6 })} {toCurrency}</p>}
+              </div>
+              {rateError && <p className="mt-3 text-xs font-bold text-red-700">{rateError}</p>}
+              {rateDate && <p className="mt-3 text-[10px] text-zinc-600">Rate data last updated: {rateDate}. Rates are indicative; verify before financial transactions.</p>}
+              <p className="mt-3 text-[10px] text-zinc-500">Available to all signed-in roles. This does not change shop records or transaction values.</p>
+            </div>
+          </div>
+        )}
         {supabaseError && (
           <div className="bg-amber-50 border-b-3 border-black p-4 flex flex-col gap-2 relative z-50 shadow-[0_4px_0_0_rgba(0,0,0,1)]">
             <div className="flex items-center justify-between">
