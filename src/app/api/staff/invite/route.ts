@@ -39,9 +39,10 @@ export async function POST(request: NextRequest) {
     }
 
     const { data: staff, error: staffError } = await admin.from("staff")
-      .select('id,name,"userId"').eq("id", staffId).eq("userId", ownerId).maybeSingle();
+       .select('id,name,"userId",archived_at').eq("id", staffId).eq("userId", ownerId).maybeSingle();
     if (staffError) throw staffError;
     if (!staff) return NextResponse.json({ error: "Staff member does not belong to this shop." }, { status: 404 });
+    if (staff.archived_at) return NextResponse.json({ error: "Restore this employee before assigning terminal access." }, { status: 409 });
 
     const { data: existing, error: existingError } = await admin.from("staff_logins")
       .select("id").eq("user_id", ownerId).eq("staff_id", staffId).eq("is_active", true).maybeSingle();
