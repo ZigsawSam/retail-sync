@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { AppProvider } from "../context/AppContext";
 
@@ -11,12 +11,9 @@ interface AppLayoutClientProps {
 }
 
 export default function AppLayoutClient({ children }: AppLayoutClientProps) {
-  const [mounted, setMounted] = useState(false);
-
   useEffect(() => {
-    setMounted(true);
-    // Unregister any lingering legacy service workers from previous SPA frameworks
-    if (typeof window !== "undefined" && "serviceWorker" in navigator) {
+    // Unregister any lingering legacy service workers from previous SPA frameworks.
+    if ("serviceWorker" in navigator) {
       navigator.serviceWorker.getRegistrations().then((registrations) => {
         for (const registration of registrations) {
           registration.unregister();
@@ -25,10 +22,6 @@ export default function AppLayoutClient({ children }: AppLayoutClientProps) {
       });
     }
   }, []);
-
-  if (!mounted) {
-    return <>{children}</>;
-  }
 
   return (
     <AppProvider>
