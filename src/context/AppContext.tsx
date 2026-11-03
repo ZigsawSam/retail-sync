@@ -388,23 +388,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateProduct = async (id: string, updates: Partial<Product>) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can edit product details.");
     const { error } = await supabase.from("products").update(updates).eq("id", id);
     if (error) throw error;
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
   };
 
   const handleUpdateProductStock = async (id: string, quantity: number) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    if (staffSession && staffSession.role !== "inventory_manager") throw new Error("Only inventory managers can update stock.");
     if (!Number.isFinite(quantity) || quantity < 0) throw new Error("Stock quantity must be a non-negative number.");
     await handleUpdateProduct(id, { quantity });
   };
 
   const handleDeleteProduct = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can delete products.");
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) throw error;
     setProducts((prev) => prev.filter((p) => p.id !== id));
   };
 
   const handleAddCustomer = async (customer: Omit<Customer, "id" | "points" | "tier" | "totalSpent">) => {
+    if (staffSession && staffSession.role !== "cashier") throw new Error("Only cashiers can create customers.");
     if (!currentUser) throw new Error("Not authenticated");
     const newCustomer = { ...customer, points: 0, tier: "Bronze" as const, totalSpent: 0, userId: tenantOwnerId };
     const { data, error } = await supabase.from("customers").insert([newCustomer]).select().single();
@@ -413,12 +418,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateCustomer = async (id: string, updates: Partial<Customer>) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can update customers.");
     const { error } = await supabase.from("customers").update(updates).eq("id", id);
     if (error) throw error;
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
   const handleDeleteCustomer = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can delete customers.");
     const { error } = await supabase.from("customers").delete().eq("id", id);
     if (error) throw error;
     setCustomers((prev) => prev.filter((c) => c.id !== id));
@@ -514,12 +521,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateSale = async (id: string, updates: Partial<Sale>) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can update sales.");
     const { error } = await supabase.from("sales").update(updates).eq("id", id);
     if (error) throw error;
     setSales((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   };
 
   const handleDeleteSale = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can delete sales.");
     const { error } = await supabase.from("sales").delete().eq("id", id);
     if (error) throw error;
     setSales((prev) => prev.filter((s) => s.id !== id));
@@ -543,14 +552,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateExpense = async (id: string, updates: Partial<Expense>) => {
-    if (staffSession) throw new Error("Staff accounts cannot update expenses.");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot update expenses.");
     const { error } = await supabase.from("expenses").update(updates).eq("id", id);
     if (error) throw error;
     setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
   };
 
   const handleDeleteExpense = async (id: string) => {
-    if (staffSession) throw new Error("Staff accounts cannot delete expenses.");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot delete expenses.");
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) throw error;
     setExpenses((prev) => prev.filter((e) => e.id !== id));
@@ -605,14 +614,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateCheque = async (id: string, updates: Partial<Cheque>) => {
-    if (staffSession) throw new Error("Staff accounts cannot manage cheques.");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage cheques.");
     const { error } = await supabase.from("cheques").update(updates).eq("id", id);
     if (error) throw error;
     setCheques((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
   const handleDeleteCheque = async (id: string) => {
-    if (staffSession) throw new Error("Staff accounts cannot manage cheques.");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage cheques.");
     const { error } = await supabase.from("cheques").delete().eq("id", id);
     if (error) throw error;
     setCheques((prev) => prev.filter((c) => c.id !== id));
@@ -627,14 +636,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateElectronicTx = async (id: string, updates: Partial<ElectronicTx>) => {
-    if (staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
     const { error } = await supabase.from("electronicTxs").update(updates).eq("id", id);
     if (error) throw error;
     setElectronicTxs((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   };
 
   const handleDeleteElectronicTx = async (id: string) => {
-    if (staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
     const { error } = await supabase.from("electronicTxs").delete().eq("id", id);
     if (error) throw error;
     setElectronicTxs((prev) => prev.filter((t) => t.id !== id));
