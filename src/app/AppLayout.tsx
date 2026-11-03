@@ -16,12 +16,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
      settings,
     cashInHand,
     currency,
+    currencyCode,
+    setCurrency,
     handleLogout,
     supabaseError,
     setSupabaseError
   } = useApp();
 
-  const [errorBannerExpanded, setErrorBannerExpanded] = useState(false);
+  const [errorBannerExpanded, setErrorBannerExpanded] = useState(false);\n
+  const currencyOptions = (() => {
+    const intlWithCurrencies = Intl as typeof Intl & { supportedValuesOf?: (key: "currency") => string[] };
+    const codes = intlWithCurrencies.supportedValuesOf?.("currency") || [
+      "AED","AFN","ALL","AMD","ANG","AOA","ARS","AUD","AWG","AZN"," BAM","BBD","BDT","BGN","BHD","BIF","BMD","BND","BOB","BRL","BSD","BTN","BWP","BYN","BZD","CAD","CDF","CHF","CLP","CNY","COP","CRC","CUP","CVE","CZK","DJF","DKK","DOP","DZD","EGP","ERN","ETB","EUR","FJD","GBP","GEL","GHS","GIP","GMD","GNF","GTQ","GYD","HKD","HNL","HRK","HTG","HUF","IDR","ILS","INR","IQD","IRR","ISK","JMD","JOD","JPY","KES","KGS","KHR","KMF","KRW","KWD","KYD","KZT","LAK","LBP","LKR","LRD","LSL","LYD","MAD","MDL","MGA","MKD","MMK","MNT","MOP","MRU","MUR","MVR","MWK","MXN","MYR","MZN","NAD","NGN","NIO","NOK","NPR","NZD","OMR","PAB","PEN","PGK","PHP","PKR","PLN","PYG","QAR","RON","RSD","RUB","RWF","SAR","SBD","SCR","SDG","SEK","SGD","SLL","SOS","SRD","SSP","STN","SYP","SZL","THB","TJS","TMT","TND","TOP","TRY","TTD","TWD","TZS","UAH","UGX","USD","UYU","UZS","VES","VND","VUV","WST","XAF","XCD","XOF","XPF","YER","ZAR","ZMW","ZWL"
+    ].map((code) => code.trim());
+    const names = new Intl.DisplayNames(["en"], { type: "currency" });
+    return [...new Set(codes)].sort().map((code) => ({ code, name: names.of(code) || code }));
+  })();
+
 
   const pathname = usePathname();
   const router = useRouter();
@@ -100,6 +111,20 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       {/* Dynamic Viewport */}
       <div className="flex-1 flex flex-col overflow-hidden relative">
+        <header className="h-14 shrink-0 bg-white border-b-2 border-black px-4 md:px-6 flex items-center justify-end gap-3">
+          <label htmlFor="display-currency" className="text-[10px] font-black uppercase tracking-wider text-zinc-600">Display currency</label>
+          <select
+            id="display-currency"
+            value={currencyCode}
+            onChange={(event) => setCurrency(event.target.value)}
+            aria-label="Choose display currency"
+            className="max-w-[min(72vw,340px)] border-2 border-black bg-[#FFC300] px-3 py-2 text-xs font-black uppercase shadow-[3px_3px_0px_0px_#000000] outline-none focus:ring-2 focus:ring-black"
+          >
+            {currencyOptions.map(({ code, name }) => (
+              <option key={code} value={code}>{name} ({code})</option>
+            ))}
+          </select>
+        </header>
         {supabaseError && (
           <div className="bg-amber-50 border-b-3 border-black p-4 flex flex-col gap-2 relative z-50 shadow-[0_4px_0_0_rgba(0,0,0,1)]">
             <div className="flex items-center justify-between">
