@@ -31,6 +31,9 @@ export default function PeoplePageRoute() {
       onOnboardStaff={handleOnboardStaff}
       onLogAttendance={handleLogAttendance}
       onAddExpense={context.handleAddExpense}
+      onArchiveStaff={context.handleArchiveStaff}
+      onRestoreStaff={context.handleRestoreStaff}
+      onDeleteStaff={context.handleDeleteStaff}
     />
   );
 }
