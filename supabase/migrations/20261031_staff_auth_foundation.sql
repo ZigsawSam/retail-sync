@@ -56,7 +56,7 @@ ALTER TABLE public.staff_logins
 
 -- One current login per employee; historical inactive rows remain unrestricted.
 CREATE UNIQUE INDEX IF NOT EXISTS staff_logins_one_active_login_per_staff
-  ON public.staff_logins (staff_id)
+  ON public.staff_logins (user_id, staff_id)
   WHERE staff_id IS NOT NULL AND is_active IS TRUE;
 
 -- One Auth identity must not be attached to multiple login records.
