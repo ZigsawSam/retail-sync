@@ -144,6 +144,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [staffLogins, setStaffLogins] = useState<StaffLogin[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [staffExpensesTotal, setStaffExpensesTotal] = useState(0);
   const [settings, setSettings] = useState<StoreSettings>({
     shopName: "My Shop",
     taxRate: 5,
@@ -337,7 +338,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (salesError) setSupabaseError(salesError);
     setSales(salesData || []);
 
-    // Financial data is owner-only. Do not even request it from staff sessions.
+    // Staff receive a narrowly scoped shop summary, never direct settings or expense rows.
+    if (staffSession) {
+      const { data: shopContext, error: shopContextError } = await supabase.rpc("staff_get_shop_context");
+      if (shopContextError) setSupabaseError(shopContextError);
+      if (shopContext) {
+        setSettings((prev) => ({
+          ...prev,
+          shopName: shopContext.shopName || "My Shop",
+          startingBalance: Number(shopContext.startingBalance || 0),
+          currency: shopContext.currency || "INR",
+        }));
+        setStaffExpensesTotal(Number(shopContext.expensesTotal || 0));
+      }
+    } else {
+      setStaffExpensesTotal(0);
+    }
+
+    // Financial data rows remain owner-only.
     if (!staffSession) {
       const { data: expensesData } = await supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false });
       setExpenses(expensesData || []);
@@ -717,7 +735,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleRoleChange = (role: ERPRole) => {
     if (!staffSession) setSelectedRole(role);
   };
-  const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
+  const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - (staffSession ? staffExpensesTotal : expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0));
   const currencyCode = currencyOverride || (settings.currency && /^[A-Z]{3}$/.test(settings.currency) ? settings.currency : "INR");
   const currency = (() => {
     try { return new Intl.NumberFormat("en", { style: "currency", currency: currencyCode }).formatToParts(0).find((part) => part.type === "currency")?.value || currencyCode; }
