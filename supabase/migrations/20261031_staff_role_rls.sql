@@ -47,7 +47,7 @@ BEGIN
     RAISE EXCEPTION 'Expected products.quantity to be numeric; inspect the deployed column type before applying staff RLS';
   END IF;
 END
-$;
+$$;
 
 -- Harden the previously introduced identity resolvers. They return only the
 -- tenant and role associated with the caller's own active Auth identity.
