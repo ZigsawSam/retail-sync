@@ -572,7 +572,7 @@ export default function PeoplePage({
                     className="w-full px-3 py-2.5 bg-white border-2 border-black text-black rounded-none text-sm font-bold focus:outline-none cursor-pointer"
                   >
                     <option value="">-- Choose employee --</option>
-                    {staffFinancials.map((fin) => (
+                    {staffFinancials.filter((fin) => !fin.member.archived_at).map((fin) => (
                       <option key={fin.member.id} value={fin.member.id}>
                         {fin.member.name} (Unpaid: {currency}{fin.unpaidBalance.toFixed(2)})
                       </option>
