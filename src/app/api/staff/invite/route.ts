@@ -61,7 +61,20 @@ export async function POST(request: NextRequest) {
       created_at: new Date().toISOString(),
     });
     if (insertError) {
-      await admin.auth.admin.deleteUser(invitation.user.id);
+      // Roll back the Auth identity if its shop-scoped authorization record
+      // could not be created. Do not silently ignore cleanup failures: that
+      // would leave an invited identity with no corresponding staff mapping.
+      const { error: cleanupError } = await admin.auth.admin.deleteUser(invitation.user.id);
+      if (cleanupError) {
+        console.error("Staff invite rollback failed:", {
+          authUserId: invitation.user.id,
+          insertError: insertError.message,
+          cleanupError: cleanupError.message,
+        });
+        return NextResponse.json({
+          error: "The invitation identity was created, but its staff access record could not be saved or rolled back. Do not resend yet; contact support to reconcile this account.",
+        }, { status: 500 });
+      }
       throw insertError;
     }
     return NextResponse.json({ success: true, message: `Invitation sent to ${email}.` });
