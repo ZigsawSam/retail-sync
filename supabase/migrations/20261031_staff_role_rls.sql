@@ -38,6 +38,14 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'The deployed products schema does not match the expected camelCase fields; inspect before applying staff RLS';
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'products'
+      AND column_name = 'quantity'
+      AND data_type IN ('smallint', 'integer', 'bigint', 'numeric', 'real', 'double precision')
+  ) THEN
+    RAISE EXCEPTION 'Expected products.quantity to be numeric; inspect the deployed column type before applying staff RLS';
+  END IF;
 END
 $;
 
