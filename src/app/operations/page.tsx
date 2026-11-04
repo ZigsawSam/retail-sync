@@ -12,6 +12,7 @@ export default function OperationsPageRoute() {
       products={context.products}
       expenses={context.expenses}
       currency={context.currency}
+      productCategories={context.settings.productCategories || []}
       onAddProduct={context.handleAddProduct}
       onUpdateProductStock={context.handleUpdateProductStock}
       onDeleteProduct={context.handleDeleteProduct}
