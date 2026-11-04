@@ -101,7 +101,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       />
 
       {/* Dynamic Viewport */}
-      <div className="flex-1 min-w-0 min-h-screen flex flex-col relative">
+      <div className="flex-1 min-w-0 min-h-0 flex flex-col relative">
         {supabaseError && (
           <div className="bg-amber-50 border-b-3 border-black p-4 flex flex-col gap-2 relative z-50 shadow-[0_4px_0_0_rgba(0,0,0,1)]">
             <div className="flex items-center justify-between">
@@ -193,7 +193,7 @@ ALTER TABLE "actualDrawerCash" DISABLE ROW LEVEL SECURITY;`);
           </div>
         )}
 
-        <main className="flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-y-contain" style={{ WebkitOverflowScrolling: "touch" }}>
+        <main className="flex flex-1 min-w-0 min-h-0 flex-col overflow-y-auto overscroll-y-contain" style={{ WebkitOverflowScrolling: "touch" }}>
           <RoleGuard currentRole={currentRole}>
             {children}
           </RoleGuard>
