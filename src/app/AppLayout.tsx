@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from "motion/react";
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const {
     currentUser,
-    authLoading,
+    isLoading,
     currentRole,
     handleRoleChange,
     operatorRole,
@@ -32,10 +32,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   // Redirect from root "/" to "/dashboard"
   useEffect(() => {
-    if (!authLoading && currentUser && pathname === "/") {
+    if (!isLoading && currentUser && pathname === "/") {
       router.replace("/dashboard");
     }
-  }, [authLoading, currentUser, pathname, router]);
+  }, [isLoading, currentUser, pathname, router]);
 
   const handleLocalBypass = () => {
     const localUser = {
@@ -48,7 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   };
 
   // Splash Loading Screen
-  if (authLoading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen w-screen bg-[#FAF8F5] flex flex-col items-center justify-center select-none font-sans">
         <div className="p-8 border-3 border-black bg-[#FFC300] shadow-[6px_6px_0px_0px_#000000] text-center max-w-sm space-y-4">
