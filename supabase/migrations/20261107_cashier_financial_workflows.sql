@@ -38,7 +38,7 @@ BEGIN
   END IF;
   INSERT INTO public.expenses
   SELECT (jsonb_populate_record(NULL::public.expenses,
-    p_expense || jsonb_build_object(
+    (p_expense - 'id' - 'userId' - 'logged_by' - 'logged_by_name') || jsonb_build_object(
       'userId',v_owner::text,
       'timestamp',COALESCE(p_expense->>'timestamp',now()::text),
       'logged_by',v_login.id,
@@ -58,11 +58,11 @@ BEGIN
   v_owner := public.current_staff_owner_id();
   IF v_owner IS NULL THEN RAISE EXCEPTION 'Cashier shop assignment not found'; END IF;
   RETURN jsonb_build_object(
-    'customers', COALESCE((SELECT jsonb_agg(to_jsonb(c)) FROM public.customers c WHERE c."userId"=v_owner::text),'[]'::jsonb),
-    'suppliers', COALESCE((SELECT jsonb_agg(to_jsonb(s)) FROM public.suppliers s WHERE s."userId"=v_owner::text),'[]'::jsonb),
-    'purchases', COALESCE((SELECT jsonb_agg(to_jsonb(p)) FROM public.purchases p WHERE p."userId"=v_owner::text),'[]'::jsonb),
-    'sales', COALESCE((SELECT jsonb_agg(to_jsonb(s)) FROM public.sales s WHERE s."userId"=v_owner::text),'[]'::jsonb),
-    'payments', COALESCE((SELECT jsonb_agg(to_jsonb(a)) FROM public.account_payments a WHERE a."userId"=v_owner::text ORDER BY a."timestamp" DESC),'[]'::jsonb)
+    'customers', COALESCE((SELECT jsonb_agg(jsonb_build_object('id',c.id,'name',c.name,'phone',c.phone)) FROM public.customers c WHERE c."userId"=v_owner::text),'[]'::jsonb),
+    'suppliers', COALESCE((SELECT jsonb_agg(jsonb_build_object('id',s.id,'name',s.name)) FROM public.suppliers s WHERE s."userId"=v_owner::text),'[]'::jsonb),
+    'purchases', COALESCE((SELECT jsonb_agg(jsonb_build_object('id',p.id,'supplier_id',p.supplier_id,'supplier_name',p.supplier_name,'due_amount',p.due_amount,'timestamp',p."timestamp")) FROM public.purchases p WHERE p."userId"=v_owner::text),'[]'::jsonb),
+    'sales', COALESCE((SELECT jsonb_agg(jsonb_build_object('id',s.id,'customerId',s."customerId",'customerName',s."customerName",'paidAmount',s."paidAmount",'dueAmount',s."dueAmount",'timestamp',s."timestamp",'paymentMethod',s."paymentMethod",'totalAmount',s."totalAmount")) FROM public.sales s WHERE s."userId"=v_owner::text),'[]'::jsonb),
+    'payments', COALESCE((SELECT jsonb_agg(jsonb_build_object('id',a.id,'party_type',a.party_type,'party_id',a.party_id,'direction',a.direction,'amount',a.amount,'payment_method',a.payment_method,'notes',a.notes,'timestamp',a."timestamp") ORDER BY a."timestamp" DESC) FROM public.account_payments a WHERE a."userId"=v_owner::text),'[]'::jsonb)
   );
 END; $$;
 
