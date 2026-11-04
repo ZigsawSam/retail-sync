@@ -45,6 +45,8 @@ export default function InventoryDashboard({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
+  const productCategoryOptions = settings.productCategories?.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => `${item.name} / ${sub}`) : [item.name]) || [];
+
   // Quick Stock Edit Dialog
   const [editingProdId, setEditingProdId] = useState<string | null>(null);
   const [quickStockVal, setQuickStockVal] = useState("");
@@ -52,7 +54,7 @@ export default function InventoryDashboard({
   // Create Product Form States
   const [newProdName, setNewProdName] = useState("");
   const [newProdBarcode, setNewProdBarcode] = useState("");
-  const [newProdCategory, setNewProdCategory] = useState("Groceries");
+  const [newProdCategory, setNewProdCategory] = useState(productCategoryOptions[0] || "Other");
   const [newProdPrice, setNewProdPrice] = useState("");
   const [newProdCostPrice, setNewProdCostPrice] = useState("");
   const [newProdQty, setNewProdQty] = useState("");
@@ -418,12 +420,7 @@ export default function InventoryDashboard({
                     onChange={(e) => setNewProdCategory(e.target.value)}
                     className="w-full px-3 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
                   >
-                    <option value="Groceries">Groceries</option>
-                    <option value="Cosmetics">Cosmetics</option>
-                    <option value="Stationery">Stationery</option>
-                    <option value="Hardware">Hardware</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Other">Other</option>
+                    {(productCategoryOptions.length ? productCategoryOptions : ["Grocery & Food","Beverages","Personal Care","Household & Cleaning","Clothing & Apparel","Electronics & Accessories","Other"]).map((category) => <option key={category} value={category}>{category}</option>)}
                   </select>
                 </div>
               </div>
