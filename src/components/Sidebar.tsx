@@ -5,6 +5,7 @@ import {
   Users, 
   Package, 
   TrendingUp, 
+  Wallet, 
   Sparkles, 
   Settings as SettingsIcon,
   Store,

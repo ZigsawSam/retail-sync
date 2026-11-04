@@ -933,6 +933,7 @@ export default function SalesPage({
     setRedeemPoints(false);
     setPointsToRedeem(0);
     setCustomDiscount(0);
+    setInitialPaymentReceived("");
     setFinalizedSale(null);
     setShowInvoiceDownloadOptions(false);
     setShowInvoiceForm(false);

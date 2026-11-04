@@ -672,7 +672,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...sale,
       userId: tenantOwnerId,
       timestamp: sale.timestamp || new Date().toISOString(),
-      clearanceStatus: (sale.paymentMethod === "Cash" || sale.paymentMethod === "Store Credit") ? "Cleared" : (sale.clearanceStatus || "Pending"),
+      clearanceStatus: sale.paymentMethod === "Cash" ? "Cleared" : (sale.clearanceStatus || "Pending"),
       processed_by: audit.processed_by || null,
       processed_by_name: audit.processed_by_name || null,
     };
