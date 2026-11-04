@@ -41,6 +41,9 @@ interface AppContextType {
   operatorRole: ERPRole;
   cashInHand: number;
   currency: string;
+  actualDrawerCash: number | null;
+  showInvoiceForm: boolean;
+  setShowInvoiceForm: (value: boolean) => void;
   supabaseError: any;
   setSupabaseError: (error: any) => void;
   handleRoleChange: (role: ERPRole) => void;
@@ -70,6 +73,7 @@ interface AppContextType {
 
   handleAddProduct: (product: Omit<Product, "id">) => Promise<void>;
   handleUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  handleUpdateProductStock: (id: string, quantity: number) => Promise<void>;
   handleDeleteProduct: (id: string) => Promise<void>;
 
   handleAddCustomer: (customer: Omit<Customer, "id" | "points" | "tier" | "totalSpent">) => Promise<void>;
@@ -97,6 +101,7 @@ interface AppContextType {
   handleResetDatabase: () => Promise<void>;
 
   handleAddCheque: (cheque: Omit<Cheque, "id" | "timestamp">) => Promise<void>;
+  handleUpdateActualDrawerCash: (amount: number | null) => Promise<void>;
   handleUpdateCheque: (id: string, updates: Partial<Cheque>) => Promise<void>;
   handleDeleteCheque: (id: string) => Promise<void>;
 
@@ -129,6 +134,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   });
   const [cheques, setCheques] = useState<Cheque[]>([]);
   const [electronicTxs, setElectronicTxs] = useState<ElectronicTx[]>([]);
+  const [actualDrawerCash, setActualDrawerCash] = useState<number | null>(null);
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
   // Load staff session from sessionStorage on mount
   useEffect(() => {
@@ -398,6 +405,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
   };
 
+  const handleUpdateProductStock = async (id: string, quantity: number) => {
+    if (!currentUser) throw new Error("Not authenticated");
+    if (staffSession && staffSession.role !== "inventory_manager") {
+      throw new Error("Only inventory managers can update stock.");
+    }
+    if (!Number.isFinite(quantity) || quantity < 0) {
+      throw new Error("Stock quantity must be a non-negative number.");
+    }
+    await handleUpdateProduct(id, { quantity });
+  };
+
   const handleDeleteProduct = async (id: string) => {
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) throw error;
@@ -590,6 +608,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCheques((prev) => [...prev, data]);
   };
 
+  const handleUpdateActualDrawerCash = async (amount: number | null) => {
+    if (staffSession) throw new Error("Staff accounts cannot access drawer cash.");
+    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
+      throw new Error("Drawer cash must be a non-negative number.");
+    }
+    setActualDrawerCash(amount);
+  };
+
   const handleUpdateCheque = async (id: string, updates: Partial<Cheque>) => {
     const { error } = await supabase.from("cheques").update(updates).eq("id", id);
     if (error) throw error;
@@ -643,6 +669,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         operatorRole,
         cashInHand,
         currency,
+        actualDrawerCash,
+        showInvoiceForm,
+        setShowInvoiceForm,
         supabaseError,
         setSupabaseError,
         handleRoleChange,
@@ -665,6 +694,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleSwitchOperator,
         handleAddProduct,
         handleUpdateProduct,
+        handleUpdateProductStock,
         handleDeleteProduct,
         handleAddCustomer,
         handleUpdateCustomer,
@@ -685,6 +715,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleUpdateSettings,
         handleResetDatabase,
         handleAddCheque,
+        handleUpdateActualDrawerCash,
         handleUpdateCheque,
         handleDeleteCheque,
         handleAddElectronicTx,
