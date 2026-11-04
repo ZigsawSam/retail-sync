@@ -11,8 +11,6 @@ import {
   Bell,
   ArrowRight,
   Users,
-  Plus,
-  Trash2,
   FileText,
   CreditCard,
   Check,
@@ -26,7 +24,6 @@ import {
   Percent,
   Layers,
   CheckCircle2,
-  BookOpen
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -40,8 +37,6 @@ import {
 import { Product, Sale, Expense, Staff, StoreSettings, Cheque, ElectronicTx, Customer, ERPRole } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { isToday, getShopLocalISOString, SHOP_TODAY_STR } from "../lib/dateUtils";
-const getDateInputToday = () => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
-const timestampForSelectedDate = (date: string) => date+"T12:00:00-07:00";
 
 
 import CashierDashboard from "./CashierDashboard";
@@ -71,7 +66,6 @@ interface DashboardProps {
   showInvoiceForm?: boolean;
   setShowInvoiceForm?: (val: boolean) => void;
   onAddExpense: (expense: Expense) => void;
-  onDeleteExpense: (id: string) => void;
   currentRole?: ERPRole;
   onAddProduct: (prod: Product) => void;
   onUpdateProductStock: (id: string, qty: number) => void;
@@ -101,7 +95,6 @@ export default function Dashboard({
   showInvoiceForm,
   setShowInvoiceForm,
   onAddExpense,
-  onDeleteExpense,
   currentRole = "admin",
   onAddProduct,
   onUpdateProductStock
@@ -146,18 +139,9 @@ export default function Dashboard({
   const [showSalesForm, setShowSalesForm] = useState(false);
   const [showDrawerModal, setShowDrawerModal] = useState(false);
   const [showAllTransactionsModal, setShowAllTransactionsModal] = useState(false);
+  const [discloseTransactions, setDiscloseTransactions] = useState(false);
   const [currencyToggle, setCurrencyToggle] = useState(settings.currency);
 
-  // Progressive disclosure states for detailed tables
-  const [discloseTransactions, setDiscloseTransactions] = useState(false);
-  const [discloseExpenses, setDiscloseExpenses] = useState(false);
-
-  // Quick Expense Form States
-  const [expCategory, setExpCategory] = useState<string>("Other");
-  const [expAmount, setExpAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(getDateInputToday);
-  const [expDesc, setExpDesc] = useState("");
-  const [expPaymentMethod, setExpPaymentMethod] = useState("Cash");
 
   // Drawer Cash Prompt Form States
   const [promptDrawerCash, setPromptDrawerCash] = useState("");
@@ -197,29 +181,7 @@ export default function Dashboard({
     }, 3000);
   };
 
-  const handleQuickAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(expAmount);
-    if (!amt || amt <= 0) return;
 
-    const newExp: Expense = {
-      id: "exp-" + Date.now(),
-      category: expCategory,
-      amount: amt,
-      description: expDesc || `${expCategory} expense`,
-      timestamp: timestampForSelectedDate(expenseDate),
-      paymentMethod: expPaymentMethod
-    };
-
-    onAddExpense(newExp);
-    triggerToast(`Expense of ${currencyToggle}${amt.toLocaleString()} recorded in Cash Book successfully!`);
-
-    // Reset fields
-    setExpAmount("");
-    setExpDesc("");
-    setExpCategory("Other");
-    setExpPaymentMethod("Cash");
-  };
 
   // --- COMPUTE TODAY'S GENERAL STATS ---
   const todaySales = useMemo(() => {
@@ -238,10 +200,6 @@ export default function Dashboard({
     return expenses.filter(e => isToday(e.timestamp));
   }, [expenses]);
 
-  const todayExpensesTotal = useMemo(() => {
-    return todayExpenses.reduce((acc, e) => acc + e.amount, 0);
-  }, [todayExpenses]);
-
   // Today's expenses by payment method
   const todayCashExpenses = useMemo(() => {
     return todayExpenses
@@ -258,24 +216,6 @@ export default function Dashboard({
   const drawerWithdrawalsToday = useMemo(() => {
     return todayExpenses
       .filter(e => e.category === "Drawer Cash Withdrawal")
-      .reduce((sum, e) => sum + e.amount, 0);
-  }, [todayExpenses]);
-
-  const todayUpiExpenses = useMemo(() => {
-    return todayExpenses
-      .filter(e => e.paymentMethod === "UPI")
-      .reduce((sum, e) => sum + e.amount, 0);
-  }, [todayExpenses]);
-
-  const todayChequeExpenses = useMemo(() => {
-    return todayExpenses
-      .filter(e => e.paymentMethod === "Cheque")
-      .reduce((sum, e) => sum + e.amount, 0);
-  }, [todayExpenses]);
-
-  const todayCardExpenses = useMemo(() => {
-    return todayExpenses
-      .filter(e => e.paymentMethod === "Card" || e.paymentMethod === "Credit/Debit Card")
       .reduce((sum, e) => sum + e.amount, 0);
   }, [todayExpenses]);
 
@@ -1149,283 +1089,6 @@ export default function Dashboard({
               </motion.div>
             )}
           </AnimatePresence>
-        </div>
-      </div>
-
-      {/* ======================================================== */}
-      {/* CASH BOOK SECTION & DAILY TRANSACTIONS */}
-      {/* ======================================================== */}
-      <div className="bg-white p-6 rounded-none border-3 border-black shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b-2 border-black pb-4 mb-5 gap-3">
-          <div>
-            <h3 className="text-xl font-black uppercase text-[#D63031] flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-[#D63031]" />
-              <span>Cash Book & Daily Expense Tracker</span>
-            </h3>
-            <p className="text-xs text-zinc-600 font-bold font-mono">
-              Record daily store expenses logged with different payment methods (Cash, UPI, Cheque, Card). Manage petty cash and operational overheads.
-            </p>
-          </div>
-          <div className="text-right shrink-0">
-            <span className="text-[10px] font-mono text-white bg-black px-2.5 py-1 rounded-none border border-black uppercase font-black">
-              DAILY CASHBOOK LEDGER
-            </span>
-          </div>
-        </div>
-
-        {/* Categories summaries row */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="p-4 bg-[#FFC300]/10 border-2 border-black rounded-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <p className="text-[10px] text-zinc-600 font-black uppercase tracking-wider font-mono font-bold">CASH EXPENSES</p>
-            <p className="text-lg font-black font-mono text-black mt-1">
-              {currencyToggle}{todayCashExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-[9px] text-zinc-500 font-bold font-mono mt-0.5">Physical store petty cash spent</p>
-          </div>
-
-          <div className="p-4 bg-[#0055A5]/10 border-2 border-black rounded-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <p className="text-[10px] text-[#0055A5] font-black uppercase tracking-wider font-mono">UPI EXPENSES</p>
-            <p className="text-lg font-black font-mono text-black mt-1">
-              {currencyToggle}{todayUpiExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-[9px] text-zinc-500 font-bold font-mono mt-0.5">Digital mobile transfers out</p>
-          </div>
-
-          <div className="p-4 bg-indigo-500/10 border-2 border-black rounded-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <p className="text-[10px] text-indigo-600 font-black uppercase tracking-wider font-mono">CHEQUE EXPENSES</p>
-            <p className="text-lg font-black font-mono text-black mt-1">
-              {currencyToggle}{todayChequeExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-[9px] text-zinc-500 font-bold font-mono mt-0.5">Cheques issued today</p>
-          </div>
-
-          <div className="p-4 bg-[#059669]/10 border-2 border-black rounded-none shadow-[2px_2px_0px_0px_rgba(0,0,0,1)]">
-            <p className="text-[10px] text-[#059669] font-black uppercase tracking-wider font-mono">CARD EXPENSES</p>
-            <p className="text-lg font-black font-mono text-black mt-1">
-              {currencyToggle}{todayCardExpenses.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </p>
-            <p className="text-[9px] text-zinc-500 font-bold font-mono mt-0.5">Corporate card swipes logged</p>
-          </div>
-        </div>
-
-        {/* Form and list grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          
-          {/* Left Column: Quick Add Expense Form */}
-          <div className="lg:col-span-5 bg-[#FAF8F5] p-5 border-2 border-black flex flex-col justify-between">
-            <div>
-              <p className="text-xs font-black uppercase text-[#D63031] border-b border-black/20 pb-2 mb-4 font-mono flex items-center gap-1.5">
-                <Plus className="w-4 h-4" /> Log Store Expense
-              </p>
-              
-              <form onSubmit={handleQuickAddExpense} className="space-y-4">
-                <div>
-                  <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Transaction Date</label>
-                  <input type="date" required value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-bold font-mono focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Category</label>
-                  <select
-                    value={expCategory}
-                    onChange={(e) => setExpCategory(e.target.value as any)}
-                    className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-bold font-mono focus:outline-none"
-                  >
-                    {(settings.expenseCategories?.length ? settings.expenseCategories.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => ({ value: `${item.name} / ${sub}`, label: `${item.name} / ${sub}` })) : [{ value: item.name, label: item.name }]) : ["Inventory & Procurement","Employee Expenses","Premises","Utilities","Marketing","Administration","Logistics","Financial Charges","Taxes & Compliance","Other"].map(value => ({value,label:value}))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                    {["Staff Salary","Agent Commission","Inventory Purchase","Rent","Utilities","Other"].filter(value => !settings.expenseCategories?.some(item => item.name === value)).map(value => <option key={value} value={value}>{value}</option>)}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Amount</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="e.g. 1500"
-                      value={expAmount}
-                      onChange={(e) => setExpAmount(e.target.value)}
-                      className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-mono font-bold focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Payment Mode</label>
-                    <select
-                      value={expPaymentMethod}
-                      onChange={(e) => setExpPaymentMethod(e.target.value)}
-                      className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-bold font-mono focus:outline-none"
-                    >
-                      <option value="Cash">Cash Mode</option>
-                      <option value="UPI">UPI Transfer</option>
-                      <option value="Cheque">Cheque Issued</option>
-                      <option value="Card">Card Swipe</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Expense Description</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Office tea & snacks, internet bill..."
-                    value={expDesc}
-                    onChange={(e) => setExpDesc(e.target.value)}
-                    className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-bold focus:outline-none"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  className="w-full py-2 bg-[#D63031] hover:bg-[#b82729] text-white text-xs font-black border-2 border-black rounded-none transition-all flex items-center justify-center gap-1 shadow-[3px_3px_0px_0px_#000] cursor-pointer"
-                >
-                  <Plus className="w-4 h-4 text-white" /> SAVE EXPENSE
-                </button>
-              </form>
-            </div>
-
-            <div className="text-[9px] text-zinc-500 font-mono mt-4 pt-3 border-t border-black/10 flex justify-between font-bold">
-              <span>LEDGER COMPLIANCE</span>
-              <span>2026-07-14</span>
-            </div>
-          </div>
-
-          {/* Right Column: List of Today's logged expenses */}
-          <div className="lg:col-span-7 flex flex-col justify-between">
-            <div className="border-2 border-black rounded-none bg-[#FAF8F5] overflow-hidden flex-1 flex flex-col">
-              <div className="p-3 bg-black text-white text-[10px] font-black tracking-wider uppercase font-mono flex items-center justify-between">
-                <span>TODAY'S EXPENSES ({todayExpenses.length})</span>
-                <button
-                  type="button"
-                  onClick={() => setDiscloseExpenses(!discloseExpenses)}
-                  className="px-3 py-1 bg-white text-black text-[9px] font-black uppercase tracking-wider font-mono border border-black cursor-pointer hover:bg-[#D63031] hover:text-white transition-all"
-                >
-                  {discloseExpenses ? "Hide Log" : "Disclose Log"}
-                </button>
-              </div>
-
-              <AnimatePresence mode="wait">
-                {!discloseExpenses ? (
-                  <motion.div
-                    key="summary-exp"
-                    initial={{ opacity: 0, y: -5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: 5 }}
-                    className="p-8 text-center bg-white space-y-4 flex-1 flex flex-col items-center justify-center min-h-[200px]"
-                  >
-                    <p className="text-xs text-zinc-600 font-medium max-w-sm leading-relaxed">
-                      Operational costs, salaries, and commissions are accounted for in the daily ledger. Click below to view the detailed debit logs.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => setDiscloseExpenses(true)}
-                      className="inline-flex items-center gap-2 px-4 py-2 bg-[#D63031] text-white border-2 border-black text-[10px] font-black uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:-translate-y-0.5 hover:shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] transition-all cursor-pointer font-mono"
-                    >
-                      📕 View Detailed Debit Log
-                    </button>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="detail-exp"
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="flex-1 max-h-[280px] overflow-y-auto divide-y divide-black/20 bg-white"
-                  >
-                    {todayExpenses.length === 0 ? (
-                      <div className="p-12 text-center text-zinc-400 italic font-mono text-xs">
-                        No store expenses logged today yet. Use the quick logger on the left to record overheads.
-                      </div>
-                    ) : (
-                      [...todayExpenses]
-                        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-                        .map((exp) => {
-                          const isAddition = exp.category === "Drawer Cash Addition" || exp.amount < 0;
-                          const isWithdrawal = exp.category === "Drawer Cash Withdrawal";
-                          
-                          let categoryLabel: string = exp.category;
-                          let amountSign = "";
-                          let amountColor = "text-black";
-                          let amountVal = exp.amount;
-
-                          if (isAddition) {
-                            if (exp.category === "Drawer Cash Addition") {
-                              categoryLabel = "Cash In (Float)";
-                            }
-                            amountSign = "+";
-                            amountColor = "text-emerald-700 font-bold";
-                            amountVal = Math.abs(exp.amount);
-                          } else if (isWithdrawal) {
-                            categoryLabel = "Cash Out (Drop)";
-                            amountSign = "-";
-                            amountColor = "text-[#D63031] font-bold";
-                            amountVal = Math.abs(exp.amount);
-                          } else {
-                            amountSign = "-";
-                            amountColor = "text-[#D63031] font-bold";
-                            amountVal = exp.amount;
-                          }
-
-                          let formattedTime = "";
-                          try {
-                            formattedTime = new Date(exp.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                          } catch {
-                            formattedTime = exp.timestamp.slice(11, 16);
-                          }
-
-                          return (
-                            <div key={exp.id} className="p-3.5 flex items-center justify-between gap-3 hover:bg-[#F5F2EB]/30 transition-colors">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2">
-                                  <span className={`inline-block px-1.5 py-0.5 text-[8px] font-black border uppercase font-mono ${
-                                    isAddition ? "bg-emerald-100 text-emerald-800 border-emerald-500" :
-                                    isWithdrawal ? "bg-red-100 text-red-800 border-red-500" :
-                                    "bg-zinc-100 text-zinc-700 border-black"
-                                  }`}>
-                                    {categoryLabel}
-                                  </span>
-                                  <span className="text-[9px] text-zinc-400 font-mono">
-                                    {formattedTime}
-                                  </span>
-                                </div>
-                                <p className="text-xs font-black text-black truncate mt-1">{exp.description}</p>
-                              </div>
-
-                              <div className="flex items-center gap-3 shrink-0">
-                                {/* Method Badge */}
-                                <span className={`px-2 py-0.5 text-[8px] font-mono font-black border border-black uppercase ${
-                                  exp.paymentMethod === "Cash" || !exp.paymentMethod ? "bg-[#FFC300] text-black" :
-                                  exp.paymentMethod === "UPI" ? "bg-[#0055A5] text-white" :
-                                  exp.paymentMethod === "Cheque" ? "bg-indigo-600 text-white" :
-                                  "bg-emerald-600 text-white"
-                                }`}>
-                                  {exp.paymentMethod || "Cash"}
-                                </span>
-
-                                <span className={`font-mono text-xs font-black w-20 text-right ${amountColor}`}>
-                                  {amountSign}{currencyToggle}{amountVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </span>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    onDeleteExpense(exp.id);
-                                    triggerToast(`Expense deleted from ledger.`);
-                                  }}
-                                  className="p-1 text-zinc-400 hover:text-[#D63031] hover:bg-[#FCE8E6] rounded border border-transparent cursor-pointer transition-colors"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })
-                    )}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          </div>
-
         </div>
       </div>
 
