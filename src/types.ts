@@ -36,6 +36,7 @@ export interface Staff {
   paymentType: "Monthly fixed" | "Daily wage" | "Hourly";
   rate: number; // monthly fixed salary, daily rate, or hourly rate
   attendance: Record<string, { present: boolean; hoursWorked?: number; wageEarned?: number }>;
+  archived_at?: string | null;
 }
 
 // Staff login record (lives in DB, has history)
@@ -44,10 +45,10 @@ export interface StaffLogin {
   id: string;
   userId: string; // shop owner (Supabase auth user)
   staffId: string; // links to Staff.id
+  authUserId?: string | null; // individual Supabase Auth identity
   name: string;
   role: "cashier" | "inventory_manager";
   email: string | null;
-  password: string; // migrate to hashed later
   isActive: boolean;
   createdAt: string;
   terminatedAt: string | null;
