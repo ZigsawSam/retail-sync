@@ -471,7 +471,7 @@ export default function Dashboard({
         total + Math.max(0, Number(sale.subtotal || (sale.totalAmount - sale.taxAmount) || 0) - Number(sale.discountAmount || 0)), 0);
       const costOfGoods = monthSales.reduce((total, sale) => total + sale.items.reduce((cost, item) => {
         const product = products.find(p => p.id === item.productId);
-        return cost + (product ? Number(product.purchasePrice || 0) * Number(item.quantity || 0) : 0);
+        return cost + Number(item.costPrice ?? product?.purchasePrice ?? 0) * Number(item.quantity || 0);
       }, 0), 0);
       const grossProfit = revenue - costOfGoods;
       const commissions = monthSales.reduce((total, sale) => total + Number(sale.commissionAgent?.commissionAmount || 0), 0);
