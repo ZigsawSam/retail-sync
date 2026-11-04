@@ -9,7 +9,7 @@ export const ROUTE_ROLES: Record<string, ERPRole[]> = {
   operations: ["admin", "inventory_manager"],
   insights: ["admin", "cashier"],
   ai: ["admin"],
-  settings: ["admin", "cashier", "inventory_manager"],
+  settings: ["admin"],
 };
 
 // Where to send a role if they land on / land on a route they can't access.
