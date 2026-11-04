@@ -59,6 +59,7 @@ export interface SaleItem {
   name: string;
   quantity: number;
   price: number; // Selling Price at checkout
+  costPrice?: number; // Cost price snapshot captured when the invoice is created
   commissionPercent: number; // specific to this item
 }
 
