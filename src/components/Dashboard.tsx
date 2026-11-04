@@ -225,7 +225,7 @@ export default function Dashboard({
       const netSales = Math.max(0, Number(sale.subtotal || sale.totalAmount - sale.taxAmount || 0) - Number(sale.discountAmount || 0));
       const costOfGoods = sale.items.reduce((cost, item) => {
         const product = products.find(p => p.id === item.productId);
-        return cost + (product ? Number(product.purchasePrice || 0) * Number(item.quantity || 0) : 0);
+        return cost + Number(item.costPrice ?? product?.purchasePrice ?? 0) * Number(item.quantity || 0);
       }, 0);
       return total + netSales - costOfGoods;
     }, 0);
@@ -565,6 +565,7 @@ export default function Dashboard({
         name: item.product.name,
         quantity: item.quantity,
         price: item.product.sellingPrice,
+        costPrice: item.product.purchasePrice,
         commissionPercent: 0
       })),
       subtotal: salesSubtotal,
