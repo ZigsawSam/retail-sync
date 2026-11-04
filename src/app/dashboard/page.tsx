@@ -31,7 +31,7 @@ export default function DashboardPageRoute() {
       actualDrawerCash={context.actualDrawerCash}
       onUpdateActualDrawerCash={context.handleUpdateActualDrawerCash}
       onAddSale={context.handleAddSale}
-      onUpdateSale={context.handleUpdateSale}
+      onUpdateSale={(sale) => context.handleUpdateSale(sale.id, sale)}
       customers={context.customers}
       onAddCustomer={context.handleAddCustomer}
       showInvoiceForm={context.showInvoiceForm}
