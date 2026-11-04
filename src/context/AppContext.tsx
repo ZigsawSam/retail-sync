@@ -765,33 +765,29 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser || staffSession) throw new Error("Only the shop owner can reset store data.");
     if (!tenantOwnerId) throw new Error("The shop owner account could not be identified.");
 
-    // Delete dependent financial and operational records before their parent records.
-    // commission_agents is a legacy/optional table and is not present in every deployment.
-    const ownerTables = [
-      "account_payments",
-      "purchases",
-      "sales",
-      "expenses",
-      "cheques",
-      "electronicTxs",
-      "staff_logins",
-      "staff",
-      "customers",
-      "suppliers",
-      "products",
+    // Delete child/ledger records before their parent records. Some deployments
+    // predate the optional accounting tables, so missing optional relations are skipped.
+    const tables: Array<{ name: string; ownerColumn: string; optional?: boolean }> = [
+      { name: "account_payments", ownerColumn: "userId", optional: true },
+      { name: "purchases", ownerColumn: "userId", optional: true },
+      { name: "sales", ownerColumn: "userId" },
+      { name: "expenses", ownerColumn: "userId" },
+      { name: "cheques", ownerColumn: "userId" },
+      { name: "electronicTxs", ownerColumn: "userId" },
+      { name: "staff_logins", ownerColumn: "user_id" },
+      { name: "commission_agents", ownerColumn: "user_id", optional: true },
+      { name: "staff", ownerColumn: "userId" },
+      { name: "customers", ownerColumn: "userId" },
+      { name: "suppliers", ownerColumn: "userId", optional: true },
+      { name: "products", ownerColumn: "userId" },
     ];
 
-    for (const table of ownerTables) {
-      const { error } = await supabase.from(table).delete().eq(
-        table === "staff_logins" ? "user_id" : "userId",
-        tenantOwnerId
-      );
-      if (error) throw new Error(`Unable to reset ${table}: ${error.message}`);
-    }
-
-    const { error: agentsError } = await supabase.from("commission_agents").delete().eq("user_id", tenantOwnerId);
-    if (agentsError && agentsError.code !== "PGRST205" && agentsError.code !== "42P01") {
-      throw new Error(`Unable to reset commission agents: ${agentsError.message}`);
+    for (const table of tables) {
+      const { error } = await supabase.from(table.name).delete().eq(table.ownerColumn, tenantOwnerId);
+      if (!error) continue;
+      const relationMissing = error.code === "PGRST205" || error.code === "42P01";
+      if (table.optional && relationMissing) continue;
+      throw new Error(`Unable to reset ${table.name}: ${error.message}`);
     }
 
     setProducts([]);
