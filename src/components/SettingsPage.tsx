@@ -5,6 +5,28 @@ import { getSupabaseClient } from "../lib/supabase";
 import type { StoreSettings, Product, Staff, StaffLogin } from "../types";
 
 
+const DEFAULT_PRODUCT_CATEGORIES = [
+  { name: "Grocery & Food", subcategories: ["Staples & Grains", "Dairy & Eggs", "Snacks", "Fresh Produce", "Packaged Foods"] },
+  { name: "Beverages", subcategories: ["Water", "Juices", "Tea & Coffee", "Soft Drinks"] },
+  { name: "Personal Care", subcategories: ["Bath & Body", "Hair Care", "Oral Care"] },
+  { name: "Household & Cleaning", subcategories: ["Cleaning Supplies", "Laundry", "Home Essentials"] },
+  { name: "Clothing & Apparel", subcategories: ["Men", "Women", "Kids", "Accessories"] },
+  { name: "Electronics & Accessories", subcategories: ["Mobiles", "Computers", "Accessories", "Appliances"] },
+  { name: "Other", subcategories: [] },
+];
+const DEFAULT_EXPENSE_CATEGORIES = [
+  { name: "Inventory & Procurement", subcategories: ["Stock Purchases", "Freight & Delivery", "Packaging"] },
+  { name: "Employee Expenses", subcategories: ["Salaries", "Wages", "Overtime", "Bonuses"] },
+  { name: "Premises", subcategories: ["Rent", "Maintenance", "Repairs"] },
+  { name: "Utilities", subcategories: ["Electricity", "Water", "Internet & Telephone"] },
+  { name: "Marketing", subcategories: ["Advertising", "Promotions", "Printing"] },
+  { name: "Administration", subcategories: ["Software", "Office Supplies", "Professional Fees"] },
+  { name: "Logistics", subcategories: ["Transport", "Fuel", "Vehicle Maintenance"] },
+  { name: "Financial Charges", subcategories: ["Bank Fees", "Payment Gateway Fees", "Interest"] },
+  { name: "Taxes & Compliance", subcategories: ["Business Taxes", "Licences", "Registration"] },
+  { name: "Other", subcategories: ["Miscellaneous"] },
+];
+
 interface SettingsPageProps {
   settings: StoreSettings;
   onUpdateSettings: (updates: Partial<StoreSettings>) => Promise<void>;
@@ -29,8 +51,8 @@ export default function SettingsPage({
   const [shopName, setShopName] = useState(settings.shopName);
   const [shopCategory, setShopCategory] = useState(settings.shopCategory || "");
   const [shopSubcategory, setShopSubcategory] = useState(settings.shopSubcategory || "");
-  const [productCategories, setProductCategories] = useState(settings.productCategories || []);
-  const [expenseCategories, setExpenseCategories] = useState(settings.expenseCategories || []);
+  const [productCategories, setProductCategories] = useState(settings.productCategories?.length ? settings.productCategories : DEFAULT_PRODUCT_CATEGORIES);
+  const [expenseCategories, setExpenseCategories] = useState(settings.expenseCategories?.length ? settings.expenseCategories : DEFAULT_EXPENSE_CATEGORIES);
   const [newProductCategory, setNewProductCategory] = useState("");
   const [newProductSubcategory, setNewProductSubcategory] = useState("");
   const [selectedProductCategory, setSelectedProductCategory] = useState("");
@@ -57,8 +79,8 @@ export default function SettingsPage({
     setShopName(settings.shopName || "");
     setShopCategory(settings.shopCategory || "");
     setShopSubcategory(settings.shopSubcategory || "");
-    setProductCategories(settings.productCategories || []);
-    setExpenseCategories(settings.expenseCategories || []);
+    setProductCategories(settings.productCategories?.length ? settings.productCategories : DEFAULT_PRODUCT_CATEGORIES);
+    setExpenseCategories(settings.expenseCategories?.length ? settings.expenseCategories : DEFAULT_EXPENSE_CATEGORIES);
     setTaxRate(settings.taxRate ?? 5);
     setCurrency(settings.currency || "Rs");
     setStartingBalance(settings.startingBalance ?? 0);
