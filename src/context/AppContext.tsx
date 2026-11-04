@@ -145,6 +145,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [commissionAgents, setCommissionAgents] = useState<CommissionAgent[]>([]);
+  const [commissionLedger, setCommissionLedger] = useState<any[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffLogins, setStaffLogins] = useState<StaffLogin[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -242,6 +243,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setProducts([]);
       setCustomers([]);
       setCommissionAgents([]);
+      setCommissionLedger([]);
       setStaff([]);
       setStaffLogins([]);
       setSales([]);
@@ -357,6 +359,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setCommissionAgents(agentsData || []);
     } else {
       setCommissionAgents([]);
+    }
+    if (!staffSession) {
+      const { data: ledgerData, error: ledgerError } = await supabase.from("commission_ledger").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+      if (ledgerError && ledgerError.code !== "42P01") setSupabaseError(ledgerError);
+      setCommissionLedger(ledgerData || []);
+    } else {
+      setCommissionLedger([]);
     }
 
     const { data: staffData } = await supabase.from("staff").select("*").eq("userId", userId);
@@ -593,6 +602,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from("commission_agents").update(updates).eq("phone", phone);
     if (error) throw error;
     setCommissionAgents((prev) => prev.map((a) => (a.phone === phone ? { ...a, ...updates } : a)));
+  };
+
+  const handleRecordAgentCommissionPayment = async (agentPhone: string, amount: number, method: string, notes?: string) => {
+    if (!currentUser || staffSession || !tenantOwnerId) throw new Error("Only the shop owner can record agent commission payments.");
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a payment amount greater than zero.");
+    const { error } = await supabase.rpc("record_agent_commission_payment", {
+      p_agent_phone: agentPhone, p_amount: amount, p_method: method, p_notes: notes || null
+    });
+    if (error) throw error;
+    const [{ data: ledgerData, error: ledgerError }, { data: agentData, error: agentError }] = await Promise.all([
+      supabase.from("commission_ledger").select("*").eq("user_id", tenantOwnerId).order("created_at", { ascending: false }),
+      supabase.from("commission_agents").select("*").eq("user_id", tenantOwnerId)
+    ]);
+    if (ledgerError) throw ledgerError;
+    if (agentError) throw agentError;
+    setCommissionLedger(ledgerData || []);
+    setCommissionAgents(agentData || []);
   };
 
   const handleDeleteCommissionAgent = async (phone: string) => {
@@ -888,6 +914,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         products,
         customers,
         commissionAgents,
+        commissionLedger,
+        handleRecordAgentCommissionPayment,
         staff,
         staffLogins,
         sales,
