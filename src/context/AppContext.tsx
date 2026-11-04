@@ -422,8 +422,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setStaffExpensesTotal(0);
     }
 
-    // Financial data rows remain owner-only.
-    if (!staffSession) {
+    // Cashiers can read the expense and payment registers through narrowly scoped RPCs.
+    if (staffSession?.role === "cashier") {
+      const [{ data: staffExpenseRows, error: staffExpenseError }, { data: paymentContext, error: paymentContextError }] = await Promise.all([
+        supabase.rpc("staff_list_expenses"),
+        supabase.rpc("staff_get_payment_context"),
+      ]);
+      if (staffExpenseError) setSupabaseError(staffExpenseError);
+      if (paymentContextError) setSupabaseError(paymentContextError);
+      setExpenses((staffExpenseRows || []) as Expense[]);
+      setAccountPayments(paymentContext?.payments || []);
+      setStaffExpensesTotal((staffExpenseRows || []).reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0));
+    } else if (!staffSession) {
       const [{ data: expensesData }, { data: accountPaymentData, error: accountPaymentError }] = await Promise.all([
         supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false }),
         supabase.from("account_payments").select("*").eq("userId", userId).order("timestamp", { ascending: false }),
@@ -736,14 +746,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSales((prev) => prev.filter((s) => s.id !== id));
   };
 
-  const handleAddExpense = async (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName">) => {
-    if (!currentUser || staffSession) throw new Error("Staff accounts cannot create expenses.");
+  const handleAddExpense = async (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName"> & { timestamp?: string }) => {
+    if (!currentUser) throw new Error("You must be signed in to record an expense.");
+    if (staffSession) {
+      if (staffSession.role !== "cashier") throw new Error("Only cashiers can record expenses.");
+      const { data, error } = await supabase.rpc("staff_create_expense", { p_expense: expense });
+      if (error) throw error;
+      setExpenses((prev) => [data as Expense, ...prev]);
+      setStaffExpensesTotal((prev) => prev + Number((data as any)?.amount ?? expense.amount));
+      return;
+    }
 
     const audit = getAuditFields();
     const newExpense = {
       ...expense,
       userId: tenantOwnerId,
-      timestamp: new Date().toISOString(),
+      timestamp: expense.timestamp || new Date().toISOString(),
       logged_by: audit.logged_by || null,
       logged_by_name: audit.logged_by_name || null,
     };
