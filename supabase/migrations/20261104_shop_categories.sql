@@ -1,3 +1,5 @@
+BEGIN;
+
 -- Shop-specific business profile and owner-managed category configuration.
 -- Settings rows are already tenant-scoped by id; existing owner-only settings policies
 -- remain the authorization boundary. Staff access continues through the narrow RPC context.
@@ -11,3 +13,7 @@ COMMENT ON COLUMN public.settings.shop_category IS 'Primary business type select
 COMMENT ON COLUMN public.settings.shop_subcategory IS 'Business subtype selected by the shop owner.';
 COMMENT ON COLUMN public.settings.product_categories IS 'Owner-managed shop-specific product categories and subcategories.';
 COMMENT ON COLUMN public.settings.expense_categories IS 'Owner-managed shop-specific expense categories and subcategories.';
+
+NOTIFY pgrst, 'reload schema';
+
+COMMIT;
