@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { Trash2, Search } from "lucide-react";
+import { Trash2, Search, Grid, Filter } from "lucide-react";
 import { Product, Expense } from "../types";
 
 interface OperationsPageProps {
