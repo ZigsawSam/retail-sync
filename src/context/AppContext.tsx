@@ -66,7 +66,7 @@ interface AppContextType {
   handleLogout: () => Promise<void>;
   handleStaffLogin: (email: string, password: string) => Promise<void>;
   handleStaffLogout: () => void;
-  handleSwitchOperator: (role: ERPRole) => Promise<void>;
+  handleSwitchOperator: (role: ERPRole) => Promise<{ success: boolean; message: string }>;
 
   handleAddProduct: (product: Omit<Product, "id">) => Promise<void>;
   handleUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
@@ -326,15 +326,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Switch operator role (for owner)
-  const handleSwitchOperator = async (role: ERPRole) => {
+  const handleSwitchOperator = async (role: ERPRole): Promise<{ success: boolean; message: string }> => {
     if (role === "admin") {
       setStaffSession(null);
       setSelectedRole("admin");
       sessionStorage.removeItem("staffSession");
-      return;
+      return { success: true, message: "Owner mode active." };
     }
 
-    if (!currentUser) throw new Error("Owner not logged in");
+    if (!currentUser) {
+      return { success: false, message: "Owner not logged in." };
+    }
 
     const { data, error } = await supabase
       .from("staff_logins")
@@ -345,7 +347,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .single();
 
     if (error || !data) {
-      throw new Error(`No active ${role} found. Onboard staff in Settings.`);
+      return { success: false, message: `No active ${role} found. Onboard staff in Settings.` };
     }
 
     const session: StaffSession = {
@@ -356,6 +358,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     setStaffSession(session);
     setSelectedRole(role);
+    return { success: true, message: `${role === "cashier" ? "Cashier" : "Inventory manager"} mode active.` };
   };
 
   const handleRoleChange = (role: ERPRole) => {
