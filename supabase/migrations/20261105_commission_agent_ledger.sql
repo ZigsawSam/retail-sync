@@ -45,10 +45,7 @@ DROP POLICY IF EXISTS commission_ledger_owner_select ON public.commission_ledger
 CREATE POLICY commission_ledger_owner_select ON public.commission_ledger
   FOR SELECT TO authenticated USING (user_id = auth.uid());
 
-BEGIN;
-
--- Atomically record a sale and deduct stock. Cash sales are considered received
--- at checkout so they are included in the cash drawer's cleared-cash total.
+-- Atomically record a sale, deduct stock, and accrue its agent commission.
 CREATE OR REPLACE FUNCTION public.create_sale_and_deduct_stock(p_sale jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -87,7 +84,6 @@ BEGIN
     RAISE EXCEPTION 'A sale must contain at least one item';
   END IF;
 
-  -- Group duplicate cart lines for the same product before checking/decrementing.
   FOR v_item IN
     SELECT item->>'productId' AS product_id,
            SUM((item->>'quantity')::integer)::integer AS quantity
@@ -125,7 +121,6 @@ BEGIN
   )).*
   RETURNING * INTO v_sale;
 
-  -- Record commission accrual atomically with the invoice and stock deduction.
   IF COALESCE((p_sale->'commissionAgent'->>'commissionAmount')::numeric, 0) > 0 THEN
     INSERT INTO public.commission_ledger (
       user_id, sale_id, agent_name, agent_phone,
@@ -155,12 +150,5 @@ $$;
 REVOKE ALL ON FUNCTION public.create_sale_and_deduct_stock(jsonb) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.create_sale_and_deduct_stock(jsonb) TO authenticated;
 
-NOTIFY pgrst, 'reload schema';
-
-COMMIT;
-
-
-REVOKE ALL ON FUNCTION public.create_sale_and_deduct_stock(jsonb) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.create_sale_and_deduct_stock(jsonb) TO authenticated;
 NOTIFY pgrst, 'reload schema';
 COMMIT;

@@ -28,17 +28,22 @@ BEGIN
   IF p_amount IS NULL OR p_amount <= 0 THEN RAISE EXCEPTION 'Payment must be greater than zero'; END IF;
   IF nullif(trim(COALESCE(p_method,'')),'') IS NULL THEN RAISE EXCEPTION 'Payment method is required'; END IF;
 
+  -- Serialize payouts for this owner/agent pair before reading the outstanding balance.
+  PERFORM pg_advisory_xact_lock(hashtextextended(v_owner::text || ':' || trim(p_agent_phone), 0));
+
   SELECT COALESCE(sum(commission_amount-paid_amount),0)
     INTO v_due
     FROM public.commission_ledger
-   WHERE user_id=v_owner AND agent_phone=p_agent_phone;
+   WHERE user_id=v_owner AND agent_phone=trim(p_agent_phone);
 
-  IF p_amount > v_due THEN RAISE EXCEPTION 'Payment exceeds this agent outstanding commission (% remaining)', v_due; END IF;
+  IF p_amount > v_due THEN
+    RAISE EXCEPTION 'Payment exceeds this agent outstanding commission (% remaining)', v_due;
+  END IF;
 
   FOR v_row IN
     SELECT id, commission_amount, paid_amount
       FROM public.commission_ledger
-     WHERE user_id=v_owner AND agent_phone=p_agent_phone
+     WHERE user_id=v_owner AND agent_phone=trim(p_agent_phone)
        AND commission_amount > paid_amount
      ORDER BY created_at, id
      FOR UPDATE
@@ -52,23 +57,23 @@ BEGIN
     v_remaining := v_remaining-v_alloc;
   END LOOP;
 
-  UPDATE public.commission_agents
-     SET "totalEarnings" = GREATEST(0, COALESCE("totalEarnings",0))
-   WHERE user_id=v_owner AND phone=p_agent_phone;
+  IF v_remaining <> 0 THEN
+    RAISE EXCEPTION 'Could not allocate the full commission payment';
+  END IF;
 
   INSERT INTO public.account_payments("userId",party_type,party_id,direction,amount,payment_method,notes)
-  VALUES(v_owner::text,'agent',p_agent_phone,'paid',p_amount,trim(p_method),
-    COALESCE(nullif(trim(p_notes),''),'Commission payout to '||p_agent_phone));
+  VALUES(v_owner::text,'agent',trim(p_agent_phone),'paid',p_amount,trim(p_method),
+    COALESCE(nullif(trim(p_notes),''),'Commission payout to '||trim(p_agent_phone)));
 
   RETURN v_due-p_amount;
 END;
 $$;
 
--- Allow the existing account payment journal to identify agent payouts.
 ALTER TABLE public.account_payments DROP CONSTRAINT IF EXISTS account_payments_party_type_check;
 ALTER TABLE public.account_payments ADD CONSTRAINT account_payments_party_type_check
   CHECK (party_type IN ('customer','supplier','agent'));
 
+REVOKE ALL ON FUNCTION public.record_agent_commission_payment(text,numeric,text,text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.record_agent_commission_payment(text,numeric,text,text) TO authenticated;
 NOTIFY pgrst, 'reload schema';
 COMMIT;
