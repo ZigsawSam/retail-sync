@@ -459,7 +459,7 @@ export default function SalesPage({
     }
   };
 
-  const closeSmsSimulator = () => {
+  const closeSmsSimulator = async () => {
     setShowSmsSimulator(false);
     if (finalizedSale) {
       try { await onAddSale(finalizedSale); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); return; }

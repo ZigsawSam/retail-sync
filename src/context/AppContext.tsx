@@ -672,7 +672,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       ...sale,
       userId: tenantOwnerId,
       timestamp: sale.timestamp || new Date().toISOString(),
-      clearanceStatus: sale.paymentMethod === "Cash" ? "Cleared" : (sale.clearanceStatus || "Pending"),
+      clearanceStatus: (sale.paymentMethod === "Cash" || sale.paymentMethod === "Store Credit") ? "Cleared" : (sale.clearanceStatus || "Pending"),
       processed_by: audit.processed_by || null,
       processed_by_name: audit.processed_by_name || null,
     };
@@ -833,9 +833,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!staffSession) setSelectedRole(role);
   };
   const cashInHand = staffSession
-    ? Number(settings.startingBalance || 0) + sales.filter((sale) => sale.paymentMethod === "Cash").reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0) - staffExpensesTotal
+    ? Number(settings.startingBalance || 0) + sales.filter((sale) => (sale.paymentMethod === "Cash" || sale.paymentMethod === "Store Credit")).reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0) - staffExpensesTotal
     : Number(settings.startingBalance || 0)
-      + sales.filter((sale) => sale.paymentMethod === "Cash").reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0)
+      + sales.filter((sale) => (sale.paymentMethod === "Cash" || sale.paymentMethod === "Store Credit")).reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0)
       + accountPayments.filter((payment) => payment.party_type === "customer" && payment.direction === "received" && payment.payment_method === "Cash").reduce((total, payment) => total + Number(payment.amount || 0), 0)
       - expenses.filter((expense) => !expense.paymentMethod || expense.paymentMethod === "Cash").reduce((total, expense) => total + Number(expense.amount || 0), 0)
       - accountPayments.filter((payment) => payment.party_type === "supplier" && payment.direction === "paid" && payment.payment_method === "Cash").reduce((total, payment) => total + Number(payment.amount || 0), 0);

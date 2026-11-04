@@ -3,7 +3,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useApp } from "../context/AppContext";
-import { Product, Customer } from "../types";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 type Supplier = { id: string; name: string; phone?: string | null };
@@ -14,8 +13,7 @@ const inputClass = "w-full px-3 py-2.5 border-2 border-black bg-white text-sm fo
 const buttonClass = "px-4 py-2.5 border-2 border-black bg-[#FFC300] text-black text-xs font-black uppercase shadow-[2px_2px_0_#000] hover:translate-y-[-1px]";
 
 export default function AccountsPage() {
-  const { currency, products, customers, refreshData } = useApp();
-  const [ownerId, setOwnerId] = useState("");
+  const { currency, products, refreshData } = useApp();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [dueCustomers, setDueCustomers] = useState<DueCustomer[]>([]);
@@ -44,11 +42,10 @@ export default function AccountsPage() {
     const { data: auth } = await supabase.auth.getUser();
     const user = auth.user;
     if (!user) { setMessage("Please sign in as the shop owner to use Accounts."); setLoading(false); return; }
-    setOwnerId(user.id);
     const [supplierRes, purchaseRes, salesRes] = await Promise.all([
       supabase.from("suppliers").select("id,name,phone").eq("userId", user.id).order("name"),
       supabase.from("purchases").select("*").eq("userId", user.id).order("timestamp", { ascending: false }),
-      supabase.from("sales").select('"customerId","customerName","customerPhone","dueAmount"').eq("userId", user.id).gt("dueAmount", 0),
+      supabase.from("sales").select("customerId,customerName,customerPhone,dueAmount").eq("userId", user.id).gt("dueAmount", 0),
     ]);
     const err = supplierRes.error || purchaseRes.error || salesRes.error;
     if (err) setMessage(err.message);
@@ -99,7 +96,7 @@ export default function AccountsPage() {
     const product = products.find(p => p.id === selectedProduct);
     const qty = Number(quantity); const cost = Number(purchasePrice || product?.purchasePrice || 0);
     const total = qty * cost; const paid = Number(paidAmount || 0);
-    if (!product || !Number.isInteger(qty) || qty <= 0 || cost < 0 || paid < 0 || paid > total) { setMessage("Check the product, quantity, cost and paid amount."); return; }
+    if (!product || !Number.isInteger(qty) || qty <= 0 || cost < 0 || paid < 0 || paid > total || (paid < total && !selectedSupplier)) { setMessage("Check the product, quantity and paid amount. A supplier is required when any amount remains due."); return; }
     void run(async () => {
       const supplier = suppliers.find(s => s.id === selectedSupplier);
       const { error } = await supabase.rpc("create_purchase", { p_purchase: {
