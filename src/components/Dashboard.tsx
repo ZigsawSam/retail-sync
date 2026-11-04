@@ -139,6 +139,7 @@ export default function Dashboard({
   const [showSalesForm, setShowSalesForm] = useState(false);
   const [showDrawerModal, setShowDrawerModal] = useState(false);
   const [showAllTransactionsModal, setShowAllTransactionsModal] = useState(false);
+  const [discloseTransactions, setDiscloseTransactions] = useState(false);
   const [currencyToggle, setCurrencyToggle] = useState(settings.currency);
 
 
