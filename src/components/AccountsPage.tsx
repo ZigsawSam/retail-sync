@@ -67,7 +67,7 @@ export default function AccountsPage() {
       supabase.from("suppliers").select("*").eq("userId", user.id).order("name"),
       supabase.from("purchases").select("*").eq("userId", user.id).order("timestamp", { ascending: false }),
     ]);
-    const err = supplierRes.error || purchaseRes.error || salesRes.error;
+    const err = supplierRes.error || purchaseRes.error;
     if (err) setMessage(err.message);
     setSuppliers((supplierRes.data || []) as Supplier[]);
     setPurchases((purchaseRes.data || []) as Purchase[]);
