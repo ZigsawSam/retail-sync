@@ -1,5 +1,9 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { getShopLocalISOString } from "../lib/dateUtils";
+const getDateInputToday = () => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const timestampForSelectedDate = (date: string) => date+"T12:00:00-07:00";
+
+
 import { 
   Plus, 
   Trash2, 
@@ -59,6 +63,7 @@ export default function SalesPage({
   const setShowInvoiceForm = controlledSetShowInvoiceForm !== undefined ? controlledSetShowInvoiceForm : localSetShowInvoiceForm;
   const [searchSalesQuery, setSearchSalesQuery] = useState("");
   const [customerName, setCustomerName] = useState("");
+  const [invoiceDate, setInvoiceDate] = useState(getDateInputToday);
   const [checkoutFocusMode, setCheckoutFocusMode] = useState(false);
 
   useEffect(() => {
@@ -389,7 +394,7 @@ export default function SalesPage({
       taxAmount,
       totalAmount,
       paymentMethod,
-      timestamp: getShopLocalISOString(),
+      timestamp: timestampForSelectedDate(invoiceDate),
       clearanceStatus: "Pending",
       discountAmount: discountAmount + customDiscount,
       commissionAgent: agentName ? {
@@ -1191,6 +1196,13 @@ export default function SalesPage({
             <Sparkles className="w-6 h-6 animate-pulse" />
           </div>
           <div className="absolute right-0 top-0 w-64 h-64 bg-white/20 rounded-none -translate-y-12 translate-x-12 rotate-12 border-l-2 border-black" />
+        </div>
+
+        {/* Invoice transaction date */}
+        <div className="bg-white p-4 rounded-none border-3 border-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+          <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5">Invoice Date</label>
+          <input type="date" required value={invoiceDate} onChange={(e) => setInvoiceDate(e.target.value)} className="w-full md:w-64 px-3 py-2.5 bg-white border-2 border-black text-black rounded-none text-sm font-bold focus:outline-none" />
+          <p className="text-[10px] text-zinc-500 font-mono mt-1">Select the actual transaction date. The invoice and sales ledger will use this date.</p>
         </div>
 
         {/* Customer & Loyalty details */}
