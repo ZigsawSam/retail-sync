@@ -40,6 +40,10 @@ import {
 import { Product, Sale, Expense, Staff, StoreSettings, Cheque, ElectronicTx, Customer, ERPRole } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { isToday, getShopLocalISOString, SHOP_TODAY_STR } from "../lib/dateUtils";
+const getDateInputToday = () => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const timestampForSelectedDate = (date: string) => date+"T12:00:00-07:00";
+
+
 import CashierDashboard from "./CashierDashboard";
 import InventoryDashboard from "./InventoryDashboard";
 
@@ -149,6 +153,7 @@ export default function Dashboard({
   // Quick Expense Form States
   const [expCategory, setExpCategory] = useState<string>("Other");
   const [expAmount, setExpAmount] = useState("");
+  const [expenseDate, setExpenseDate] = useState(getDateInputToday);
   const [expDesc, setExpDesc] = useState("");
   const [expPaymentMethod, setExpPaymentMethod] = useState("Cash");
 
@@ -200,7 +205,7 @@ export default function Dashboard({
       category: expCategory,
       amount: amt,
       description: expDesc || `${expCategory} expense`,
-      timestamp: getShopLocalISOString(),
+      timestamp: timestampForSelectedDate(expenseDate),
       paymentMethod: expPaymentMethod
     };
 
@@ -1210,6 +1215,10 @@ export default function Dashboard({
               </p>
               
               <form onSubmit={handleQuickAddExpense} className="space-y-4">
+                <div>
+                  <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Transaction Date</label>
+                  <input type="date" required value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-bold font-mono focus:outline-none" />
+                </div>
                 <div>
                   <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Category</label>
                   <select
