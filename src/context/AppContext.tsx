@@ -37,13 +37,13 @@ interface AppContextType {
   currentUser: any;
   staffSession: StaffSession | null;
   isLoading: boolean;
+  authLoading: boolean;
   currentRole: ERPRole;
   operatorRole: ERPRole;
   cashInHand: number;
   currency: string;
-  actualDrawerCash: number | null;
-  showInvoiceForm: boolean;
-  setShowInvoiceForm: (value: boolean) => void;
+  currencyCode: string;
+  setCurrency: (currency: string) => void;
   supabaseError: any;
   setSupabaseError: (error: any) => void;
   handleRoleChange: (role: ERPRole) => void;
@@ -59,6 +59,9 @@ interface AppContextType {
   settings: StoreSettings;
   cheques: Cheque[];
   electronicTxs: ElectronicTx[];
+  actualDrawerCash: number | null;
+  showInvoiceForm: boolean;
+  setShowInvoiceForm: (value: boolean) => void;
 
   // Computed
   lowStockProducts: Product[];
@@ -69,7 +72,7 @@ interface AppContextType {
   handleLogout: () => Promise<void>;
   handleStaffLogin: (email: string, password: string) => Promise<void>;
   handleStaffLogout: () => void;
-  handleSwitchOperator: (role: ERPRole) => Promise<{ success: boolean; message: string }>;
+  handleSwitchOperator: (role: ERPRole, password?: string, email?: string) => Promise<{ success: boolean; message: string }>;
 
   handleAddProduct: (product: Omit<Product, "id">) => Promise<void>;
   handleUpdateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
@@ -87,6 +90,8 @@ interface AppContextType {
   handleAddStaff: (staff: Omit<Staff, "id" | "attendance">) => Promise<void>;
   handleUpdateStaff: (id: string, updates: Partial<Staff>) => Promise<void>;
   handleDeleteStaff: (id: string) => Promise<void>;
+  handleArchiveStaff: (id: string) => Promise<void>;
+  handleRestoreStaff: (id: string) => Promise<void>;
   handleMarkAttendance: (staffId: string, date: string, present: boolean, hoursWorked?: number) => Promise<void>;
 
   handleAddSale: (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => Promise<void>;
@@ -101,13 +106,13 @@ interface AppContextType {
   handleResetDatabase: () => Promise<void>;
 
   handleAddCheque: (cheque: Omit<Cheque, "id" | "timestamp">) => Promise<void>;
-  handleUpdateActualDrawerCash: (amount: number | null) => Promise<void>;
   handleUpdateCheque: (id: string, updates: Partial<Cheque>) => Promise<void>;
   handleDeleteCheque: (id: string) => Promise<void>;
 
   handleAddElectronicTx: (tx: Omit<ElectronicTx, "id" | "timestamp">) => Promise<void>;
   handleUpdateElectronicTx: (id: string, updates: Partial<ElectronicTx>) => Promise<void>;
   handleDeleteElectronicTx: (id: string) => Promise<void>;
+  handleUpdateActualDrawerCash: (amount: number | null) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -115,9 +120,24 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
+  const [tenantOwnerId, setTenantOwnerId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedRole, setSelectedRole] = useState<ERPRole>("admin");
   const [supabaseError, setSupabaseError] = useState<any>(null);
+  const [currencyOverride, setCurrencyOverride] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("retail_sync_display_currency");
+      if (saved && /^[A-Z]{3}$/.test(saved)) setCurrencyOverride(saved);
+    } catch { /* Storage may be unavailable; use the shop default. */ }
+  }, []);
+
+  const setCurrency = useCallback((nextCurrency: string) => {
+    if (!/^[A-Z]{3}$/.test(nextCurrency)) return;
+    setCurrencyOverride(nextCurrency);
+    try { window.localStorage.setItem("retail_sync_display_currency", nextCurrency); } catch { /* Keep in-memory selection. */ }
+  }, []);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -126,6 +146,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [staffLogins, setStaffLogins] = useState<StaffLogin[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [staffExpensesTotal, setStaffExpensesTotal] = useState(0);
   const [settings, setSettings] = useState<StoreSettings>({
     shopName: "My Shop",
     taxRate: 5,
@@ -137,156 +158,240 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [actualDrawerCash, setActualDrawerCash] = useState<number | null>(null);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
 
-  // Load staff session from sessionStorage on mount
+  // Auth initialization: always release the startup screen when there is no
+  // session or when Supabase cannot restore one. Authenticated identities stay
+  // in the loading state until the tenant/role resolution effect completes.
   useEffect(() => {
-    const saved = sessionStorage.getItem("staffSession");
-    if (saved) {
+    let active = true;
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      const user = session?.user ?? null;
+      setCurrentUser(user);
+      if (user) {
+        setIsLoading(true);
+      } else {
+        setStaffSession(null);
+        setTenantOwnerId(null);
+        setIsLoading(false);
+      }
+    });
+
+    const restoreSession = async () => {
       try {
-        setStaffSession(JSON.parse(saved));
-      } catch {}
-    }
-  }, []);
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        if (!active) return;
+        const user = data.session?.user ?? null;
+        setCurrentUser(user);
+        if (!user) {
+          setStaffSession(null);
+          setTenantOwnerId(null);
+          setIsLoading(false);
+        }
+      } catch (error) {
+        console.error("Unable to restore Supabase session:", error);
+        if (!active) return;
+        setCurrentUser(null);
+        setStaffSession(null);
+        setTenantOwnerId(null);
+        setSupabaseError(error);
+        setIsLoading(false);
+      }
+    };
 
-  // Persist staff session
-  useEffect(() => {
-    if (staffSession) {
-      sessionStorage.setItem("staffSession", JSON.stringify(staffSession));
-    } else {
-      sessionStorage.removeItem("staffSession");
-    }
-  }, [staffSession]);
-
-  // Auth listener
-  useEffect(() => {
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      setCurrentUser(session?.user ?? null);
-      setIsLoading(false);
-    });
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setCurrentUser(session?.user ?? null);
-      setIsLoading(false);
-    });
-
+    void restoreSession();
     return () => {
+      active = false;
       authListener?.subscription.unsubscribe();
     };
   }, []);
 
-  // Fetch all data when user is authenticated
-  const fetchAllData = useCallback(async () => {
-    if (!currentUser) return;
+  // Resolve a staff Auth identity to its shop tenant using database-owned helpers.
+  // Never trust a role or owner ID from localStorage/sessionStorage.
+  useEffect(() => {
+    let cancelled = false;
+    const resolveIdentity = async () => {
+      if (!currentUser) {
+        setTenantOwnerId(null);
+        setStaffSession(null);
+        setIsLoading(false);
+        return;
+      }
+      setIsLoading(true);
+      // Clear prior tenant data before resolving the next authenticated identity.
+      setProducts([]);
+      setCustomers([]);
+      setCommissionAgents([]);
+      setStaff([]);
+      setStaffLogins([]);
+      setSales([]);
+      setExpenses([]);
+      setCheques([]);
+      setElectronicTxs([]);
+      setActualDrawerCash(null);
+      setStaffExpensesTotal(0);
+      setSettings({ shopName: "My Shop", taxRate: 5, currency: "Rs", startingBalance: 0 });
+      try {
+        const [{ data: ownerData, error: ownerError }, { data: roleData, error: roleError }] = await Promise.all([
+          supabase.rpc("current_staff_owner_id"),
+          supabase.rpc("current_staff_role"),
+        ]);
+        if (ownerError || roleError) throw ownerError || roleError;
+        const role = typeof roleData === "string" ? roleData : null;
+        const ownerId = typeof ownerData === "string" ? ownerData : null;
 
-    const userId = currentUser.id;
-
-    // Products
-    const { data: productsData } = await supabase
-      .from("products")
-      .select("*")
-      .eq("user_id", userId);
-    if (productsData) setProducts(productsData);
-
-    // Customers
-    const { data: customersData } = await supabase
-      .from("customers")
-      .select("*")
-      .eq("user_id", userId);
-    if (customersData) setCustomers(customersData);
-
-    // Commission agents
-    const { data: agentsData } = await supabase
-      .from("commission_agents")
-      .select("*")
-      .eq("user_id", userId);
-    if (agentsData) setCommissionAgents(agentsData);
-
-    // Staff
-    const { data: staffData } = await supabase
-      .from("staff")
-      .select("*")
-      .eq("user_id", userId);
-    if (staffData) setStaff(staffData);
-
-    // Staff logins
-    const { data: loginsData } = await supabase
-      .from("staff_logins")
-      .select("*")
-      .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-    if (loginsData) {
-      setStaffLogins(
-        loginsData.map((l: any) => ({
-          id: l.id,
-          userId: l.user_id,
-          staffId: l.staff_id,
-          name: l.name,
-          role: l.role,
-          email: l.email,
-          password: l.password,
-          isActive: l.is_active,
-          createdAt: l.created_at,
-          terminatedAt: l.terminated_at,
-        }))
-      );
-    }
-
-    // Sales
-    const { data: salesData } = await supabase
-      .from("sales")
-      .select("*")
-      .eq("user_id", userId)
-      .order("timestamp", { ascending: false });
-    if (salesData) setSales(salesData);
-
-    // Expenses
-    const { data: expensesData } = await supabase
-      .from("expenses")
-      .select("*")
-      .eq("user_id", userId)
-      .order("timestamp", { ascending: false });
-    if (expensesData) setExpenses(expensesData);
-
-    // Settings
-    const { data: settingsData } = await supabase
-      .from("settings")
-      .select("*")
-      .eq("id", userId)
-      .single();
-    if (settingsData) {
-      setSettings({
-        shopName: settingsData.shop_name || "My Shop",
-        taxRate: settingsData.tax_rate || 5,
-        currency: settingsData.currency || "Rs",
-        startingBalance: settingsData.starting_balance || 0,
-        quickAddProductIds: settingsData.quick_add_product_ids || [],
-        theme: settingsData.theme || "enterprise",
-        staffAccounts: settingsData.staffAccounts || {},
-        ownerPassword: settingsData.owner_password,
-      });
-    }
-
-    // Cheques
-    const { data: chequesData } = await supabase
-      .from("cheques")
-      .select("*")
-      .eq("user_id", userId);
-    if (chequesData) setCheques(chequesData);
-
-    // Electronic transactions
-    const { data: electronicData } = await supabase
-      .from("electronic_transactions")
-      .select("*")
-      .eq("user_id", userId);
-    if (electronicData) setElectronicTxs(electronicData);
+        if (role && ownerId && ["cashier", "inventory_manager"].includes(role)) {
+          const { data: login, error: loginError } = await supabase
+            .from("staff_logins")
+            .select("id,name,role")
+            .eq("auth_user_id", currentUser.id)
+            .eq("is_active", true)
+            .is("terminated_at", null)
+            .maybeSingle();
+          if (loginError) throw loginError;
+          if (!login) throw new Error("This staff account is inactive or not assigned to a shop.");
+          if (!cancelled) {
+            setTenantOwnerId(ownerId);
+            setStaffSession({ staffLoginId: login.id, name: login.name, role: login.role });
+            setSelectedRole(login.role);
+          }
+        } else {
+          // A null staff mapping is not proof of owner status. Confirm an owner
+          // settings row exists before granting the owner UI/session context.
+          const { data: ownerSettings, error: settingsError } = await supabase
+            .from("settings").select("id").eq("id", currentUser.id).maybeSingle();
+          if (settingsError) throw settingsError;
+          if (!ownerSettings) throw new Error("This account is not an active shop owner or staff member.");
+          if (!cancelled) {
+            setTenantOwnerId(currentUser.id);
+            setStaffSession(null);
+            setSelectedRole("admin");
+          }
+        }
+      } catch (error: any) {
+        console.error("Unable to resolve authenticated operator:", error);
+        if (!cancelled) {
+          setTenantOwnerId(null);
+          setStaffSession(null);
+          setSelectedRole("cashier");
+          setSupabaseError(error);
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    };
+    resolveIdentity();
+    return () => { cancelled = true; };
   }, [currentUser]);
+
+  // Fetch only rows the authenticated identity is authorized to see via RLS.
+  const fetchAllData = useCallback(async () => {
+    if (!currentUser || !tenantOwnerId) return;
+    const userId = tenantOwnerId;
+
+    let productsData: any[] | null = null;
+    let productsError: any = null;
+    if (staffSession) {
+      const { data, error } = await supabase.rpc("staff_list_products");
+      productsData = (data || []) as any[];
+      productsError = error;
+    } else {
+      const { data, error } = await supabase.from("products").select("*").eq("userId", userId);
+      productsData = data;
+      productsError = error;
+    }
+    if (productsError) setSupabaseError(productsError);
+    setProducts(productsData || []);
+
+    const { data: customersData, error: customersError } = await supabase
+      .from("customers").select("*").eq("userId", userId);
+    if (customersError) setSupabaseError(customersError);
+    setCustomers(customersData || []);
+
+    // Commission agents are outside the deployed staff permission matrix.
+    // Do not query this unverified legacy table from a staff identity.
+    if (!staffSession) {
+      const { data: agentsData } = await supabase.from("commission_agents").select("*").eq("user_id", userId);
+      setCommissionAgents(agentsData || []);
+    } else {
+      setCommissionAgents([]);
+    }
+
+    const { data: staffData } = await supabase.from("staff").select("*").eq("userId", userId);
+    setStaff(staffData || []);
+
+    const { data: loginsData, error: loginsError } = await supabase
+      .from("staff_logins").select("id,user_id,staff_id,auth_user_id,name,role,email,is_active,created_at,terminated_at").eq("user_id", userId).order("created_at", { ascending: false });
+    if (loginsError) setSupabaseError(loginsError);
+    setStaffLogins((loginsData || []).map((l: any) => ({
+        id: l.id,
+        userId: l.user_id,
+        staffId: l.staff_id,
+        authUserId: l.auth_user_id,
+        name: l.name,
+        role: l.role,
+        email: l.email,
+        isActive: l.is_active,
+        createdAt: l.created_at,
+        terminatedAt: l.terminated_at,
+    })));
+
+    const { data: salesData, error: salesError } = await supabase
+      .from("sales").select("*").eq("userId", userId).order("timestamp", { ascending: false });
+    if (salesError) setSupabaseError(salesError);
+    setSales(salesData || []);
+
+    // Staff receive a narrowly scoped shop summary, never direct settings or expense rows.
+    if (staffSession) {
+      const { data: shopContext, error: shopContextError } = await supabase.rpc("staff_get_shop_context");
+      if (shopContextError) setSupabaseError(shopContextError);
+      if (shopContext) {
+        setSettings((prev) => ({
+          ...prev,
+          shopName: shopContext.shopName || "My Shop",
+          startingBalance: Number(shopContext.startingBalance || 0),
+          currency: shopContext.currency || "INR",
+        }));
+        setStaffExpensesTotal(Number(shopContext.expensesTotal || 0));
+      }
+    } else {
+      setStaffExpensesTotal(0);
+    }
+
+    // Financial data rows remain owner-only.
+    if (!staffSession) {
+      const { data: expensesData } = await supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false });
+      setExpenses(expensesData || []);
+
+      const { data: settingsData } = await supabase.from("settings").select("*").eq("id", userId).maybeSingle();
+      if (settingsData) {
+        setSettings({
+          shopName: settingsData.shop_name || "My Shop",
+          taxRate: settingsData.tax_rate ?? 5,
+          currency: settingsData.currency || "Rs",
+          startingBalance: settingsData.starting_balance ?? 0,
+          quickAddProductIds: settingsData.quick_add_product_ids || [],
+          theme: settingsData.theme || "enterprise",
+          staffAccounts: settingsData.staff_accounts || {},
+          ownerPassword: settingsData.owner_password,
+        });
+      }
+
+      const { data: chequesData } = await supabase.from("cheques").select("*").eq("userId", userId);
+      setCheques(chequesData || []);
+
+      const { data: electronicData } = await supabase.from("electronicTxs").select("*").eq("userId", userId);
+      setElectronicTxs(electronicData || []);
+    } else {
+      setExpenses([]);
+      setCheques([]);
+      setElectronicTxs([]);
+    }
+  }, [currentUser, tenantOwnerId, staffSession]);
 
   useEffect(() => {
     fetchAllData();
   }, [fetchAllData]);
-
-  // ============================================
-  // AUTH FUNCTIONS
-  // ============================================
 
   const handleLogin = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -296,80 +401,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
+    setTenantOwnerId(null);
     setStaffSession(null);
-    sessionStorage.removeItem("staffSession");
+    setSelectedRole("admin");
   };
 
-  // CUSTOM STAFF LOGIN — queries staff_logins table directly
-  // Does NOT use Supabase Auth (staff are not auth.users)
-  const handleStaffLogin = async (email: string, password: string) => {
-    if (!currentUser) throw new Error("Owner not logged in");
-
-    const { data, error } = await supabase
-      .from("staff_logins")
-      .select("*")
-      .eq("user_id", currentUser.id)
-      .eq("email", email)
-      .eq("password", password)
-      .eq("is_active", true)
-      .single();
-
-    if (error || !data) {
-      throw new Error("Invalid staff credentials");
-    }
-
-    const session: StaffSession = {
-      staffLoginId: data.id,
-      name: data.name,
-      role: data.role,
-    };
-
-    setStaffSession(session);
+  // Legacy callback retained for component compatibility; credentials are no longer checked here.
+  const handleStaffLogin = async (_email: string, _password: string) => {
+    throw new Error("Staff must sign in using their individual Supabase Auth invitation.");
   };
 
   const handleStaffLogout = () => {
-    setStaffSession(null);
-    sessionStorage.removeItem("staffSession");
+    void handleLogout();
   };
 
-  // Switch operator role (for owner)
-  const handleSwitchOperator = async (role: ERPRole): Promise<{ success: boolean; message: string }> => {
-    if (role === "admin") {
-      setStaffSession(null);
-      setSelectedRole("admin");
-      sessionStorage.removeItem("staffSession");
-      return { success: true, message: "Owner mode active." };
+  const handleSwitchOperator = async (role: ERPRole) => {
+    if (role === "admin" && staffSession) {
+      return { success: false, message: "Staff accounts cannot switch into the owner role." };
     }
-
-    if (!currentUser) {
-      return { success: false, message: "Owner not logged in." };
+    if (staffSession && role !== staffSession.role) {
+      return { success: false, message: "Your account is not authorized for that role." };
     }
-
-    const { data, error } = await supabase
-      .from("staff_logins")
-      .select("*")
-      .eq("user_id", currentUser.id)
-      .eq("role", role === "cashier" ? "cashier" : "inventory_manager")
-      .eq("is_active", true)
-      .single();
-
-    if (error || !data) {
-      return { success: false, message: `No active ${role} found. Onboard staff in Settings.` };
+    if (!staffSession && role !== "admin") {
+      return { success: false, message: "Use the staff member's own Auth account to enter a staff role." };
     }
-
-    const session: StaffSession = {
-      staffLoginId: data.id,
-      name: data.name,
-      role: data.role,
-    };
-
-    setStaffSession(session);
     setSelectedRole(role);
-    return { success: true, message: `${role === "cashier" ? "Cashier" : "Inventory manager"} mode active.` };
-  };
-
-  const handleRoleChange = (role: ERPRole) => {
-    if (!staffSession) setSelectedRole(role);
+    return { success: true, message: role === "admin" ? "Owner controls active." : "Staff role active." };
   };
 
   // ============================================
@@ -389,10 +446,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleAddProduct = async (product: Omit<Product, "id">) => {
-    if (!currentUser) throw new Error("Not authenticated");
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can create products.");
     const { data, error } = await supabase
       .from("products")
-      .insert([{ ...product, user_id: currentUser.id }])
+      .insert([{ ...product, userId: tenantOwnerId }])
       .select()
       .single();
     if (error) throw error;
@@ -400,6 +457,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateProduct = async (id: string, updates: Partial<Product>) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can edit product details.");
     const { error } = await supabase.from("products").update(updates).eq("id", id);
     if (error) throw error;
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
@@ -407,82 +465,116 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleUpdateProductStock = async (id: string, quantity: number) => {
     if (!currentUser) throw new Error("Not authenticated");
-    if (staffSession && staffSession.role !== "inventory_manager") {
-      throw new Error("Only inventory managers can update stock.");
+    if (staffSession && staffSession.role !== "inventory_manager") throw new Error("Only inventory managers can update stock.");
+    if (!Number.isFinite(quantity) || quantity < 0) throw new Error("Stock quantity must be a non-negative number.");
+
+    if (staffSession) {
+      // Staff cannot SELECT the products base table. Use the narrowly scoped
+      // RPC, which verifies the active role and tenant inside the database.
+      const { data, error } = await supabase.rpc("staff_update_product_stock", {
+        p_product_id: id,
+        p_quantity: quantity,
+      });
+      if (error) throw error;
+      if (data !== true) throw new Error("Product was not found in this shop or stock was not updated.");
+      setProducts((prev) => prev.map((product) => product.id === id ? { ...product, quantity } : product));
+      return;
     }
-    if (!Number.isFinite(quantity) || quantity < 0) {
-      throw new Error("Stock quantity must be a non-negative number.");
-    }
+
     await handleUpdateProduct(id, { quantity });
   };
 
   const handleDeleteProduct = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can delete products.");
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) throw error;
     setProducts((prev) => prev.filter((p) => p.id !== id));
   };
 
   const handleAddCustomer = async (customer: Omit<Customer, "id" | "points" | "tier" | "totalSpent">) => {
+    if (staffSession && staffSession.role !== "cashier") throw new Error("Only cashiers can create customers.");
     if (!currentUser) throw new Error("Not authenticated");
-    const newCustomer = { ...customer, points: 0, tier: "Bronze" as const, totalSpent: 0, user_id: currentUser.id };
+    const newCustomer = { ...customer, points: 0, tier: "Bronze" as const, totalSpent: 0, userId: tenantOwnerId };
     const { data, error } = await supabase.from("customers").insert([newCustomer]).select().single();
     if (error) throw error;
     setCustomers((prev) => [...prev, data]);
   };
 
   const handleUpdateCustomer = async (id: string, updates: Partial<Customer>) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can update customers.");
     const { error } = await supabase.from("customers").update(updates).eq("id", id);
     if (error) throw error;
     setCustomers((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
   const handleDeleteCustomer = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can delete customers.");
     const { error } = await supabase.from("customers").delete().eq("id", id);
     if (error) throw error;
     setCustomers((prev) => prev.filter((c) => c.id !== id));
   };
 
   const handleAddCommissionAgent = async (agent: Omit<CommissionAgent, "totalEarnings">) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage commission agents.");
     if (!currentUser) throw new Error("Not authenticated");
-    const newAgent = { ...agent, totalEarnings: 0, user_id: currentUser.id };
+    const newAgent = { ...agent, totalEarnings: 0, user_id: tenantOwnerId };
     const { data, error } = await supabase.from("commission_agents").insert([newAgent]).select().single();
     if (error) throw error;
     setCommissionAgents((prev) => [...prev, data]);
   };
 
   const handleUpdateCommissionAgent = async (phone: string, updates: Partial<CommissionAgent>) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage commission agents.");
     const { error } = await supabase.from("commission_agents").update(updates).eq("phone", phone);
     if (error) throw error;
     setCommissionAgents((prev) => prev.map((a) => (a.phone === phone ? { ...a, ...updates } : a)));
   };
 
   const handleDeleteCommissionAgent = async (phone: string) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage commission agents.");
     const { error } = await supabase.from("commission_agents").delete().eq("phone", phone);
     if (error) throw error;
     setCommissionAgents((prev) => prev.filter((a) => a.phone !== phone));
   };
 
   const handleAddStaff = async (staffMember: Omit<Staff, "id" | "attendance">) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage staff records.");
     if (!currentUser) throw new Error("Not authenticated");
-    const newStaff = { ...staffMember, attendance: {}, user_id: currentUser.id };
+    const newStaff = { ...staffMember, attendance: {}, userId: tenantOwnerId };
     const { data, error } = await supabase.from("staff").insert([newStaff]).select().single();
     if (error) throw error;
     setStaff((prev) => [...prev, data]);
   };
 
   const handleUpdateStaff = async (id: string, updates: Partial<Staff>) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage staff records.");
     const { error } = await supabase.from("staff").update(updates).eq("id", id);
     if (error) throw error;
     setStaff((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   };
 
-  const handleDeleteStaff = async (id: string) => {
-    const { error } = await supabase.from("staff").delete().eq("id", id);
-    if (error) throw error;
-    setStaff((prev) => prev.filter((s) => s.id !== id));
+  const manageStaffRecord = async (id: string, action: "archive" | "restore" | "delete") => {
+    if (staffSession || !currentUser) throw new Error("Only the shop owner can manage staff records.");
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session?.access_token) throw new Error("Your owner session has expired. Please sign in again.");
+    const response = await fetch("/api/staff/manage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session.access_token}` },
+      body: JSON.stringify({ staffId: id, action }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Unable to update staff record.");
+    if (action === "delete") setStaff((prev) => prev.filter((s) => s.id !== id));
+    else if (action === "archive") setStaff((prev) => prev.map((s: any) => s.id === id ? { ...s, archived_at: new Date().toISOString() } : s));
+    else setStaff((prev) => prev.map((s: any) => s.id === id ? { ...s, archived_at: null } : s));
   };
 
+  const handleArchiveStaff = (id: string) => manageStaffRecord(id, "archive");
+  const handleRestoreStaff = (id: string) => manageStaffRecord(id, "restore");
+  const handleDeleteStaff = (id: string) => manageStaffRecord(id, "delete");
+
   const handleMarkAttendance = async (staffId: string, date: string, present: boolean, hoursWorked?: number) => {
+    if (staffSession) throw new Error("Staff accounts cannot manage attendance.");
     const staffMember = staff.find((s) => s.id === staffId);
     if (!staffMember) return;
 
@@ -509,11 +601,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleAddSale = async (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => {
     if (!currentUser) throw new Error("Not authenticated");
+    if (staffSession && staffSession.role !== "cashier") throw new Error("Only cashiers can create sales.");
 
     const audit = getAuditFields();
     const newSale = {
       ...sale,
-      user_id: currentUser.id,
+      userId: tenantOwnerId,
       timestamp: new Date().toISOString(),
       processed_by: audit.processed_by || null,
       processed_by_name: audit.processed_by_name || null,
@@ -525,24 +618,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateSale = async (id: string, updates: Partial<Sale>) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can update sales.");
     const { error } = await supabase.from("sales").update(updates).eq("id", id);
     if (error) throw error;
     setSales((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
   };
 
   const handleDeleteSale = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can delete sales.");
     const { error } = await supabase.from("sales").delete().eq("id", id);
     if (error) throw error;
     setSales((prev) => prev.filter((s) => s.id !== id));
   };
 
   const handleAddExpense = async (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName">) => {
-    if (!currentUser) throw new Error("Not authenticated");
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot create expenses.");
 
     const audit = getAuditFields();
     const newExpense = {
       ...expense,
-      user_id: currentUser.id,
+      userId: tenantOwnerId,
       timestamp: new Date().toISOString(),
       logged_by: audit.logged_by || null,
       logged_by_name: audit.logged_by_name || null,
@@ -554,41 +649,48 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateExpense = async (id: string, updates: Partial<Expense>) => {
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot update expenses.");
     const { error } = await supabase.from("expenses").update(updates).eq("id", id);
     if (error) throw error;
     setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)));
   };
 
   const handleDeleteExpense = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot delete expenses.");
     const { error } = await supabase.from("expenses").delete().eq("id", id);
     if (error) throw error;
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
 
   const handleUpdateSettings = async (updates: Partial<StoreSettings>) => {
-    if (!currentUser) throw new Error("Not authenticated");
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can change store settings.");
 
     const dbUpdates: any = {};
-    if (updates.shopName !== undefined) dbUpdates.shop_name = updates.shopName;
-    if (updates.taxRate !== undefined) dbUpdates.tax_rate = updates.taxRate;
+    if (updates.shopName !== undefined) dbUpdates.shopName = updates.shopName;
+    if (updates.taxRate !== undefined) dbUpdates.taxRate = updates.taxRate;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
-    if (updates.startingBalance !== undefined) dbUpdates.starting_balance = updates.startingBalance;
+    if (updates.startingBalance !== undefined) dbUpdates.startingBalance = updates.startingBalance;
     if (updates.quickAddProductIds !== undefined) dbUpdates.quick_add_product_ids = updates.quickAddProductIds;
     if (updates.theme !== undefined) dbUpdates.theme = updates.theme;
-    if (updates.staffAccounts !== undefined) dbUpdates.staffAccounts = updates.staffAccounts;
+    if (updates.staffAccounts !== undefined) dbUpdates.staff_accounts = updates.staffAccounts;
     if (updates.ownerPassword !== undefined) dbUpdates.owner_password = updates.ownerPassword;
 
-    const { error } = await supabase.from("settings").update(dbUpdates).eq("id", currentUser.id);
+    const { error } = await supabase.from("settings").update(dbUpdates).eq("id", tenantOwnerId);
     if (error) throw error;
     setSettings((prev) => ({ ...prev, ...updates }));
   };
 
   const handleResetDatabase = async () => {
-    if (!currentUser) throw new Error("Not authenticated");
-    const tables = ["products", "customers", "commission_agents", "staff", "staff_logins", "sales", "expenses", "cheques", "electronic_transactions"];
+    if (!currentUser || staffSession) throw new Error("Only the shop owner can reset store data.");
+    const tables = ["products", "customers", "staff", "sales", "expenses", "cheques", "electronicTxs"];
     for (const table of tables) {
-      await supabase.from(table).delete().eq("user_id", currentUser.id);
+      const { error } = await supabase.from(table).delete().eq("userId", tenantOwnerId);
+      if (error) throw error;
     }
+    const { error: agentsError } = await supabase.from("commission_agents").delete().eq("user_id", tenantOwnerId);
+    if (agentsError) throw agentsError;
+    const { error: loginsError } = await supabase.from("staff_logins").delete().eq("user_id", tenantOwnerId);
+    if (loginsError) throw loginsError;
     setProducts([]);
     setCustomers([]);
     setCommissionAgents([]);
@@ -601,60 +703,60 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleAddCheque = async (cheque: Omit<Cheque, "id" | "timestamp">) => {
-    if (!currentUser) throw new Error("Not authenticated");
-    const newCheque = { ...cheque, user_id: currentUser.id, timestamp: new Date().toISOString() };
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage cheques.");
+    const newCheque = { ...cheque, userId: tenantOwnerId, timestamp: new Date().toISOString() };
     const { data, error } = await supabase.from("cheques").insert([newCheque]).select().single();
     if (error) throw error;
     setCheques((prev) => [...prev, data]);
   };
 
-  const handleUpdateActualDrawerCash = async (amount: number | null) => {
-    if (staffSession) throw new Error("Staff accounts cannot access drawer cash.");
-    if (amount !== null && (!Number.isFinite(amount) || amount < 0)) {
-      throw new Error("Drawer cash must be a non-negative number.");
-    }
-    setActualDrawerCash(amount);
-  };
-
   const handleUpdateCheque = async (id: string, updates: Partial<Cheque>) => {
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage cheques.");
     const { error } = await supabase.from("cheques").update(updates).eq("id", id);
     if (error) throw error;
     setCheques((prev) => prev.map((c) => (c.id === id ? { ...c, ...updates } : c)));
   };
 
   const handleDeleteCheque = async (id: string) => {
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage cheques.");
     const { error } = await supabase.from("cheques").delete().eq("id", id);
     if (error) throw error;
     setCheques((prev) => prev.filter((c) => c.id !== id));
   };
 
   const handleAddElectronicTx = async (tx: Omit<ElectronicTx, "id" | "timestamp">) => {
-    if (!currentUser) throw new Error("Not authenticated");
-    const newTx = { ...tx, user_id: currentUser.id, timestamp: new Date().toISOString() };
-    const { data, error } = await supabase.from("electronic_transactions").insert([newTx]).select().single();
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    const newTx = { ...tx, userId: tenantOwnerId, timestamp: new Date().toISOString() };
+    const { data, error } = await supabase.from("electronicTxs").insert([newTx]).select().single();
     if (error) throw error;
     setElectronicTxs((prev) => [...prev, data]);
   };
 
   const handleUpdateElectronicTx = async (id: string, updates: Partial<ElectronicTx>) => {
-    const { error } = await supabase.from("electronic_transactions").update(updates).eq("id", id);
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    const { error } = await supabase.from("electronicTxs").update(updates).eq("id", id);
     if (error) throw error;
     setElectronicTxs((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)));
   };
 
   const handleDeleteElectronicTx = async (id: string) => {
-    const { error } = await supabase.from("electronic_transactions").delete().eq("id", id);
+    if (!currentUser || staffSession) throw new Error("Staff accounts cannot manage financial transactions.");
+    const { error } = await supabase.from("electronicTxs").delete().eq("id", id);
     if (error) throw error;
     setElectronicTxs((prev) => prev.filter((t) => t.id !== id));
   };
 
   const currentRole: ERPRole = staffSession?.role ?? selectedRole;
   const operatorRole: ERPRole = staffSession?.role ?? selectedRole;
-  const cashInHand =
-    Number(settings.startingBalance || 0) +
-    sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) -
-    expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
-  const currency = settings.currency || "Rs";
+  const handleRoleChange = (role: ERPRole) => {
+    if (!staffSession) setSelectedRole(role);
+  };
+  const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - (staffSession ? staffExpensesTotal : expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0));
+  const currencyCode = currencyOverride || (settings.currency && /^[A-Z]{3}$/.test(settings.currency) ? settings.currency : "INR");
+  const currency = (() => {
+    try { return new Intl.NumberFormat("en", { style: "currency", currency: currencyCode }).formatToParts(0).find((part) => part.type === "currency")?.value || currencyCode; }
+    catch { return currencyCode; }
+  })();
 
   const lowStockProducts = products.filter((p) => p.quantity <= p.lowStockLimit);
   const overstockProducts = products.filter((p) => p.quantity >= p.overstockLimit);
@@ -665,13 +767,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         staffSession,
         isLoading,
+        authLoading: isLoading,
         currentRole,
         operatorRole,
         cashInHand,
         currency,
-        actualDrawerCash,
-        showInvoiceForm,
-        setShowInvoiceForm,
+        currencyCode,
+        setCurrency,
         supabaseError,
         setSupabaseError,
         handleRoleChange,
@@ -685,6 +787,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         settings,
         cheques,
         electronicTxs,
+        actualDrawerCash,
+        showInvoiceForm,
+        setShowInvoiceForm,
         lowStockProducts,
         overstockProducts,
         handleLogin,
@@ -705,6 +810,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleAddStaff,
         handleUpdateStaff,
         handleDeleteStaff,
+        handleArchiveStaff,
+        handleRestoreStaff,
         handleMarkAttendance,
         handleAddSale,
         handleUpdateSale,
@@ -715,9 +822,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleUpdateSettings,
         handleResetDatabase,
         handleAddCheque,
-        handleUpdateActualDrawerCash,
         handleUpdateCheque,
         handleDeleteCheque,
+        handleUpdateActualDrawerCash: async (amount: number | null) => { if (staffSession) throw new Error("Staff accounts cannot access drawer cash."); setActualDrawerCash(amount); },
         handleAddElectronicTx,
         handleUpdateElectronicTx,
         handleDeleteElectronicTx,
