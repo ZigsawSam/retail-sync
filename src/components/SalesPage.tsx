@@ -425,8 +425,16 @@ export default function SalesPage({
     setShowCommissionPrompt(false);
     if (!finalizedSale) return;
 
+    // Save the sale and its commission immediately, regardless of whether SMS is requested.
+    // This prevents a failed notification or a closed dialog from losing the sale.
+    try {
+      await onAddSale(finalizedSale);
+    } catch (error: any) {
+      alert(error?.message || "Sale could not be saved. No stock was deducted.");
+      return;
+    }
+
     if (generate && finalizedSale.commissionAgent) {
-      // Call simulated SMS route on Express server
       try {
         const response = await fetch("/api/sms/send", {
           method: "POST",
@@ -435,35 +443,30 @@ export default function SalesPage({
             agentName: finalizedSale.commissionAgent.name,
             agentPhone: finalizedSale.commissionAgent.phone,
             amount: finalizedSale.commissionAgent.commissionAmount.toFixed(2),
-            shopName: shopName
+            shopName
           })
         });
         const data = await response.json();
-        
         if (data.success) {
           setSmsSentDetails(data.sms);
           setSimulatedSmsText(data.sms.message);
-          finalizedSale.commissionAgent.notified = true;
+          setShowSmsSimulator(true);
+        } else {
+          setSimulatedSmsText(`Commission of ${currency}${finalizedSale.commissionAgent.commissionAmount.toFixed(2)} has been recorded for ${finalizedSale.commissionAgent.name}. SMS notification was not sent.`);
           setShowSmsSimulator(true);
         }
       } catch (err) {
-        console.error("Failed to send simulated SMS API call:", err);
-        // Fallback simulate client-side
-        const msg = `Dear ${finalizedSale.commissionAgent.name}, you have been credited with a commission of $${finalizedSale.commissionAgent.commissionAmount.toFixed(2)} from ${shopName}. Thank you!`;
-        setSimulatedSmsText(msg);
+        console.error("Commission SMS notification failed:", err);
+        setSimulatedSmsText(`Commission of ${currency}${finalizedSale.commissionAgent.commissionAmount.toFixed(2)} has been recorded for ${finalizedSale.commissionAgent.name}. SMS notification was not sent.`);
         setShowSmsSimulator(true);
       }
     } else {
-      // Add to logs and open download options
-      try { await onAddSale(finalizedSale); setShowInvoiceDownloadOptions(true); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); }
+      setShowInvoiceDownloadOptions(true);
     }
   };
 
   const closeSmsSimulator = async () => {
     setShowSmsSimulator(false);
-    if (finalizedSale) {
-      try { await onAddSale(finalizedSale); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); return; }
-    }
     setShowInvoiceDownloadOptions(true);
   };
 
