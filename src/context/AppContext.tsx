@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 import type {
   Product,
@@ -158,6 +158,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [electronicTxs, setElectronicTxs] = useState<ElectronicTx[]>([]);
   const [actualDrawerCash, setActualDrawerCash] = useState<number | null>(null);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const lastAuthUserIdRef = useRef<string | null>(null);
 
   // Auth initialization: always release the startup screen when there is no
   // session or when Supabase cannot restore one. Authenticated identities stay
@@ -172,13 +173,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
 
       const user = session?.user ?? null;
-      setCurrentUser((previous: any) => {
-        if (previous?.id === user?.id) return previous;
-        return user;
-      });
-      if (event === "SIGNED_IN" && user) {
-        setIsLoading(true);
-      } else if (event === "SIGNED_OUT" || !user) {
+      if (user) {
+        const isDifferentIdentity = lastAuthUserIdRef.current !== user.id;
+        lastAuthUserIdRef.current = user.id;
+        // Supabase may emit SIGNED_IN again when a tab regains focus or
+        // synchronizes auth storage. Only a genuinely different identity
+        // should put the application back into its startup state.
+        if (isDifferentIdentity) {
+          setCurrentUser(user);
+          if (event === "SIGNED_IN") setIsLoading(true);
+        }
+      } else {
+        lastAuthUserIdRef.current = null;
+        setCurrentUser(null);
         setStaffSession(null);
         setTenantOwnerId(null);
         setIsLoading(false);
@@ -191,6 +198,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (error) throw error;
         if (!active) return;
         const user = data.session?.user ?? null;
+        lastAuthUserIdRef.current = user?.id ?? null;
         setCurrentUser(user);
         if (!user) {
           setStaffSession(null);
