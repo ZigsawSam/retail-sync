@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { 
   Package, 
   Plus, 
@@ -46,6 +46,7 @@ export default function InventoryDashboard({
   };
 
   const productCategoryOptions = settings.productCategories?.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => `${item.name} / ${sub}`) : [item.name]) || [];
+  const expenseCategoryOptions = settings.expenseCategories?.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => `${item.name} / ${sub}`) : [item.name]) || [];
 
   // Quick Stock Edit Dialog
   const [editingProdId, setEditingProdId] = useState<string | null>(null);
@@ -54,11 +55,29 @@ export default function InventoryDashboard({
   // Create Product Form States
   const [newProdName, setNewProdName] = useState("");
   const [newProdBarcode, setNewProdBarcode] = useState("");
-  const [newProdCategory, setNewProdCategory] = useState(productCategoryOptions[0] || "Other");
+  const [newProdCategory, setNewProdCategory] = useState("");
+  const [procurementExpenseCategory, setProcurementExpenseCategory] = useState("");
   const [newProdPrice, setNewProdPrice] = useState("");
   const [newProdCostPrice, setNewProdCostPrice] = useState("");
   const [newProdQty, setNewProdQty] = useState("");
   const [newProdSupplier, setNewProdSupplier] = useState("");
+
+  // Keep stock-entry selectors synchronized when Settings categories load or change.
+  useEffect(() => {
+    if (!productCategoryOptions.includes(newProdCategory)) {
+      setNewProdCategory(productCategoryOptions[0] || "");
+    }
+  }, [settings.productCategories, newProdCategory]);
+
+  useEffect(() => {
+    const preferredCategory = expenseCategoryOptions.find((category) => category.toLowerCase() === "inventory & procurement / stock purchases")
+      || expenseCategoryOptions.find((category) => category.toLowerCase().startsWith("inventory & procurement /"))
+      || expenseCategoryOptions[0]
+      || "";
+    if (!expenseCategoryOptions.includes(procurementExpenseCategory)) {
+      setProcurementExpenseCategory(preferredCategory);
+    }
+  }, [settings.expenseCategories, procurementExpenseCategory]);
 
   // Low Stock threshold: products with quantity <= lowStockLimit
   const lowStockProducts = useMemo(() => {
@@ -88,8 +107,8 @@ export default function InventoryDashboard({
 
   const handleCreateProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProdName || !newProdBarcode || !newProdPrice || !newProdCostPrice || !newProdQty) {
-      triggerToast("Please fill all required inputs");
+    if (!newProdName || !newProdBarcode || !newProdPrice || !newProdCostPrice || !newProdQty || !newProdCategory) {
+      triggerToast(!newProdCategory ? "Add a product category in Settings before creating stock" : "Please fill all required inputs");
       return;
     }
 
@@ -121,7 +140,7 @@ export default function InventoryDashboard({
     if (expenseCost > 0) {
       onAddExpense({
         id: `exp-${Date.now()}`,
-        category: "Inventory Purchase",
+        category: procurementExpenseCategory || "Other",
         amount: expenseCost,
         description: `Procured stock: ${qtyNum}x ${newProdName}`,
         paymentMethod: "Cash",
@@ -420,8 +439,24 @@ export default function InventoryDashboard({
                     onChange={(e) => setNewProdCategory(e.target.value)}
                     className="w-full px-3 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none"
                   >
-                    {(productCategoryOptions.length ? productCategoryOptions : ["Grocery & Food","Beverages","Personal Care","Household & Cleaning","Clothing & Apparel","Electronics & Accessories","Other"]).map((category) => <option key={category} value={category}>{category}</option>)}
+                    <option value="">Select a category from Settings</option>
+                    {productCategoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
                   </select>
+                  {productCategoryOptions.length === 0 && <p className="mt-1 text-[10px] font-bold text-red-600">No product categories configured. Add one in Settings → Product Categories.</p>}
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase mb-1.5 text-zinc-700">Procurement Expense Category *</label>
+                  <select
+                    value={procurementExpenseCategory}
+                    onChange={(e) => setProcurementExpenseCategory(e.target.value)}
+                    required
+                    disabled={expenseCategoryOptions.length === 0}
+                    className="w-full px-3 py-2.5 bg-white border-2 border-black rounded-none font-bold text-xs focus:outline-none disabled:bg-zinc-100"
+                  >
+                    <option value="">Select an expense category from Settings</option>
+                    {expenseCategoryOptions.map((category) => <option key={category} value={category}>{category}</option>)}
+                  </select>
+                  {expenseCategoryOptions.length === 0 && <p className="mt-1 text-[10px] font-bold text-red-600">No expense categories configured. Add one in Settings → Expense Categories.</p>}
                 </div>
               </div>
 
