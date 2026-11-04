@@ -383,6 +383,7 @@ export default function SalesPage({
       name: item.product.name,
       quantity: item.quantity,
       price: item.price,
+      costPrice: item.product.purchasePrice,
       commissionPercent: item.commissionPercent
     }));
 

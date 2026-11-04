@@ -219,20 +219,23 @@ export default function Dashboard({
       .reduce((sum, e) => sum + e.amount, 0);
   }, [todayExpenses]);
 
-  // Today's Profit Margin
+  // Today's estimated net operating profit (tax excluded; logged operating expenses included).
   const todayProfit = useMemo(() => {
-    let profit = 0;
-    todaySales.forEach(sale => {
-      sale.items.forEach(item => {
-        const prod = products.find(p => p.id === item.productId);
-        const costPrice = prod ? prod.purchasePrice : 0;
-        const margin = (item.price - costPrice) * item.quantity;
-        const comm = sale.commissionAgent ? (item.price * item.quantity * (item.commissionPercent / 100)) : 0;
-        profit += (margin - comm);
-      });
-    });
-    return profit;
-  }, [todaySales, products]);
+    const grossProfit = todaySales.reduce((total, sale) => {
+      const netSales = Math.max(0, Number(sale.subtotal || sale.totalAmount - sale.taxAmount || 0) - Number(sale.discountAmount || 0));
+      const costOfGoods = sale.items.reduce((cost, item) => {
+        const product = products.find(p => p.id === item.productId);
+        return cost + Number(item.costPrice ?? product?.purchasePrice ?? 0) * Number(item.quantity || 0);
+      }, 0);
+      return total + netSales - costOfGoods;
+    }, 0);
+    const commissions = todaySales.reduce((total, sale) => total + Number(sale.commissionAgent?.commissionAmount || 0), 0);
+    const operatingExpenses = todayExpenses
+      .filter(e => !["Drawer Cash Addition", "Drawer Cash Withdrawal"].includes(e.category)
+        && !/inventory|stock purchase|procurement|commission/i.test(e.category))
+      .reduce((total, expense) => total + Number(expense.amount || 0), 0);
+    return grossProfit - commissions - operatingExpenses;
+  }, [todaySales, todayExpenses, products]);
 
   // --- CASH DRAWER LEDGER CALCULATIONS ---
   const cashSalesToday = useMemo(() => {
@@ -450,41 +453,41 @@ export default function Dashboard({
     return Object.values(agentsMap).sort((a, b) => b.salesReferred - a.salesReferred).slice(0, 5);
   }, [sales]);
 
-  // Monthly revenue chart
+  // Last six calendar months, calculated only from this shop's recorded sales and expenses.
+  // Inventory purchases are excluded from operating expenses; their cost is recognized as COGS when sold.
   const monthlyRevenueData = useMemo(() => {
-    const months = ["Feb", "Mar", "Apr", "May", "Jun", "Jul"];
-    const baseTrends: Record<string, { revenue: number; profit: number }> = {
-      "Feb": { revenue: 8400, profit: 3100 },
-      "Mar": { revenue: 9900, profit: 3800 },
-      "Apr": { revenue: 11200, profit: 4600 },
-      "May": { revenue: 10500, profit: 4100 },
-      "Jun": { revenue: 13100, profit: 5400 },
-      "Jul": { revenue: 0, profit: 0 }
-    };
-
-    let julRevenue = 0;
-    let julProfit = 0;
-    sales.forEach(sale => {
-      if (sale.timestamp.includes("2026-07")) {
-        julRevenue += sale.totalAmount;
-        sale.items.forEach(item => {
-          const p = products.find(prod => prod.id === item.productId);
-          const cost = p ? p.purchasePrice : 0;
-          const comm = sale.commissionAgent ? (item.price * item.quantity * (item.commissionPercent / 100)) : 0;
-          julProfit += ((item.price - cost) * item.quantity - comm);
-        });
-      }
+    const now = new Date();
+    const monthStarts = Array.from({ length: 6 }, (_, index) => {
+      const date = new Date(now.getFullYear(), now.getMonth() - (5 - index), 1);
+      return { year: date.getFullYear(), month: date.getMonth(), date };
     });
-
-    baseTrends["Jul"].revenue = Math.round(julRevenue);
-    baseTrends["Jul"].profit = Math.round(julProfit);
-
-    return months.map(m => ({
-      name: m,
-      Revenue: baseTrends[m].revenue,
-      Profit: baseTrends[m].profit
-    }));
-  }, [sales, products]);
+    return monthStarts.map(({ year, month, date }) => {
+      const inMonth = (value: string) => {
+        const parsed = new Date(value);
+        return !Number.isNaN(parsed.getTime()) && parsed.getFullYear() === year && parsed.getMonth() === month;
+      };
+      const monthSales = sales.filter(sale => inMonth(sale.timestamp));
+      const revenue = monthSales.reduce((total, sale) =>
+        total + Math.max(0, Number(sale.subtotal || (sale.totalAmount - sale.taxAmount) || 0) - Number(sale.discountAmount || 0)), 0);
+      const costOfGoods = monthSales.reduce((total, sale) => total + sale.items.reduce((cost, item) => {
+        const product = products.find(p => p.id === item.productId);
+        return cost + Number(item.costPrice ?? product?.purchasePrice ?? 0) * Number(item.quantity || 0);
+      }, 0), 0);
+      const grossProfit = revenue - costOfGoods;
+      const commissions = monthSales.reduce((total, sale) => total + Number(sale.commissionAgent?.commissionAmount || 0), 0);
+      const operatingExpenses = expenses
+        .filter(expense => inMonth(expense.timestamp)
+          && !["Drawer Cash Addition", "Drawer Cash Withdrawal"].includes(expense.category)
+          && !/inventory|stock purchase|procurement|commission/i.test(expense.category))
+        .reduce((total, expense) => total + Number(expense.amount || 0), 0);
+      return {
+        name: date.toLocaleDateString("en-IN", { month: "short", year: "2-digit" }),
+        Revenue: Math.round(revenue),
+        "Gross Profit": Math.round(grossProfit),
+        "Net Profit": Math.round(grossProfit - commissions - operatingExpenses),
+      };
+    });
+  }, [sales, products, expenses]);
 
   const currency = settings.currency;
 
@@ -562,6 +565,7 @@ export default function Dashboard({
         name: item.product.name,
         quantity: item.quantity,
         price: item.product.sellingPrice,
+        costPrice: item.product.purchasePrice,
         commissionPercent: 0
       })),
       subtotal: salesSubtotal,
@@ -1099,7 +1103,7 @@ export default function Dashboard({
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-2">
             <div>
               <h3 className="text-xl font-black uppercase text-black">Revenue & Net Profit</h3>
-              <p className="text-xs text-zinc-600 font-bold font-mono">Comparative monthly breakdown of sales and margins</p>
+              <p className="text-xs text-zinc-600 font-bold font-mono">Actual monthly revenue, gross profit and net operating profit</p>
             </div>
             <div className="flex items-center gap-4 text-xs font-black font-mono">
               <div className="flex items-center gap-1.5">
@@ -1108,6 +1112,10 @@ export default function Dashboard({
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3.5 h-3.5 border border-black bg-[#D63031]" />
+                <span className="text-black font-black">GROSS PROFIT</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-3.5 h-3.5 border border-black bg-[#16A34A]" />
                 <span className="text-black font-black">NET PROFIT</span>
               </div>
             </div>
@@ -1124,6 +1132,10 @@ export default function Dashboard({
                     <stop offset="5%" stopColor="#D63031" stopOpacity={0.15}/>
                     <stop offset="95%" stopColor="#D63031" stopOpacity={0}/>
                   </linearGradient>
+                  <linearGradient id="colorNet" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#16A34A" stopOpacity={0.15}/>
+                    <stop offset="95%" stopColor="#16A34A" stopOpacity={0}/>
+                  </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="2 2" stroke="#000" strokeOpacity={0.15} vertical={false} />
                 <XAxis dataKey="name" stroke="#000000" fontSize={11} tickLine={true} axisLine={true} className="font-mono font-bold" />
@@ -1133,7 +1145,8 @@ export default function Dashboard({
                   labelClassName="font-black text-xs font-mono"
                 />
                 <Area type="monotone" dataKey="Revenue" stroke="#0055A5" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" name="Revenue" />
-                <Area type="monotone" dataKey="Profit" stroke="#D63031" strokeWidth={3} fillOpacity={1} fill="url(#colorProf)" name="Profit" />
+                <Area type="monotone" dataKey="Gross Profit" stroke="#D63031" strokeWidth={3} fillOpacity={1} fill="url(#colorProf)" name="Gross Profit" />
+                <Area type="monotone" dataKey="Net Profit" stroke="#16A34A" strokeWidth={3} fillOpacity={1} fill="url(#colorNet)" name="Net Profit" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
