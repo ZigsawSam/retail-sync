@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useApp } from "../context/AppContext";
 import { Expense } from "../types";
 import { isToday, getShopLocalISOString } from "../lib/dateUtils";
@@ -27,6 +27,11 @@ export default function ExpensesRegisterPage() {
   const [drawerAmount, setDrawerAmount] = useState("");
   const [drawerReason, setDrawerReason] = useState("");
   const [drawerAction, setDrawerAction] = useState<"add" | "withdraw">("add");
+
+  useEffect(() => {
+    if (categories.length && !categories.includes(category)) setCategory(categories[0]);
+    if (!categories.length) setCategory("");
+  }, [categories.join("|"), category]);
 
   const money = (value: number) => currency + Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const todayExpenses = useMemo(() => expenses.filter((item) => isToday(item.timestamp)), [expenses]);
