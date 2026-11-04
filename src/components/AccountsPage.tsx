@@ -63,23 +63,14 @@ export default function AccountsPage() {
     const { data: auth } = await supabase.auth.getUser();
     const user = auth.user;
     if (!user) { setMessage("Please sign in as the shop owner to use Accounts."); setLoading(false); return; }
-    const [supplierRes, purchaseRes, salesRes] = await Promise.all([
+    const [supplierRes, purchaseRes] = await Promise.all([
       supabase.from("suppliers").select("*").eq("userId", user.id).order("name"),
       supabase.from("purchases").select("*").eq("userId", user.id).order("timestamp", { ascending: false }),
-      supabase.from("sales").select("customerId,customerName,customerPhone,dueAmount").eq("userId", user.id).gt("dueAmount", 0),
     ]);
     const err = supplierRes.error || purchaseRes.error || salesRes.error;
     if (err) setMessage(err.message);
     setSuppliers((supplierRes.data || []) as Supplier[]);
     setPurchases((purchaseRes.data || []) as Purchase[]);
-    const grouped = new Map<string, DueCustomer>();
-    (salesRes.data || []).forEach((sale: any) => {
-      if (!sale.customerId) return;
-      const current = grouped.get(sale.customerId) || { id: sale.customerId, name: sale.customerName || "Customer", phone: sale.customerPhone || "", due: 0 };
-      current.due += Number(sale.dueAmount || 0);
-      grouped.set(sale.customerId, current);
-    });
-    setDueCustomers(Array.from(grouped.values()).filter(x => x.due > 0).sort((a,b) => b.due-a.due));
     setLoading(false);
   }, []);
 
@@ -182,7 +173,7 @@ export default function AccountsPage() {
 
   return <div className="flex-1 overflow-y-auto bg-[#FAF8F5] p-5 md:p-8 text-black space-y-6">
     <header className="border-b-4 border-black pb-5 flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-3xl font-black uppercase">Purchases & Credit Ledger</h1><p className="text-xs font-mono font-bold text-zinc-600 mt-1">Inventory purchases, supplier payables and customer receivables</p></div>
+      <div><h1 className="text-3xl font-black uppercase">Purchases</h1><p className="text-xs font-mono font-bold text-zinc-600 mt-1">Supplier invoices and stock intake</p></div>
       <button className={buttonClass} onClick={() => void load()} disabled={loading}>Refresh</button>
     </header>
     {message && <div className="p-3 border-2 border-black bg-amber-100 text-sm font-bold">{message}</div>}
@@ -214,60 +205,6 @@ export default function AccountsPage() {
         <p className="text-xs font-bold bg-zinc-100 p-2">Purchase total: {money(Number(quantity||0)*Number(purchasePrice||0))} · Due: {money(Math.max(0,Number(quantity||0)*Number(purchasePrice||0)-Number(paidAmount||0)))}</p>
         <button className={buttonClass} disabled={busy || loading}>Save purchase & add stock</button>
       </form>
-      <div className="space-y-5">
-        <form onSubmit={addSupplier} className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
-          <h2 className="font-black uppercase text-lg border-b-2 border-black pb-2">{editingSupplier ? "Edit supplier details" : "Add supplier"}</h2>
-          <p className="text-[11px] text-zinc-500 font-bold">Only supplier name is required. All other details are optional.</p>
-          <input required className={inputClass} value={supplierName} onChange={e=>setSupplierName(e.target.value)} placeholder="Supplier / firm name *"/>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className={inputClass} value={supplierOwner} onChange={e=>setSupplierOwner(e.target.value)} placeholder="Owner / contact person"/>
-            <input className={inputClass} value={supplierGst} onChange={e=>setSupplierGst(e.target.value.toUpperCase())} placeholder="GSTIN"/>
-            <input className={inputClass} value={supplierPhone} onChange={e=>setSupplierPhone(e.target.value)} placeholder="Primary phone"/>
-            <input className={inputClass} value={supplierAltPhone} onChange={e=>setSupplierAltPhone(e.target.value)} placeholder="Alternate phone"/>
-            <input className={inputClass} type="email" value={supplierEmail} onChange={e=>setSupplierEmail(e.target.value)} placeholder="Email address"/>
-            <input className={inputClass} value={supplierCity} onChange={e=>setSupplierCity(e.target.value)} placeholder="City"/>
-            <input className={inputClass} value={supplierState} onChange={e=>setSupplierState(e.target.value)} placeholder="State"/>
-            <input className={inputClass} value={supplierPostal} onChange={e=>setSupplierPostal(e.target.value)} placeholder="PIN / Postal code"/>
-            <input className={inputClass} value={supplierCountry} onChange={e=>setSupplierCountry(e.target.value)} placeholder="Country"/>
-          </div>
-          <textarea className={inputClass} rows={2} value={supplierAddress} onChange={e=>setSupplierAddress(e.target.value)} placeholder="Full address"/>
-          <textarea className={inputClass} rows={2} value={supplierNotes} onChange={e=>setSupplierNotes(e.target.value)} placeholder="Notes / additional information"/>
-          <div className="flex gap-2"><button className={buttonClass} disabled={busy}>{editingSupplier ? "Save supplier changes" : "Save supplier"}</button>{editingSupplier && <button type="button" className="px-4 py-2.5 border-2 border-black bg-white text-xs font-black uppercase" onClick={resetSupplierForm}>Cancel</button>}</div>
-        </form>
-        <form onSubmit={paySupplier} className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
-          <h2 className="font-black uppercase text-lg border-b-2 border-black pb-2">Pay supplier</h2>
-          <select required className={inputClass} value={supplierPayId} onChange={e=>setSupplierPayId(e.target.value)}><option value="">Select supplier</option>{supplierBalances.map(s=><option key={s.id} value={s.id}>{s.name} · Due {money(s.due)}</option>)}</select>
-          <input required className={inputClass} type="number" min="0.01" step="0.01" value={supplierPayAmount} onChange={e=>setSupplierPayAmount(e.target.value)} placeholder="Payment amount"/>
-          <select className={inputClass} value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}><option>Cash</option><option>UPI</option><option>Bank</option><option>Card</option><option>Cheque</option></select>
-          <button className={buttonClass} disabled={busy}>Record supplier payment</button>
-        </form>
-      </div>
-    </section>
-    <section className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
-      <h2 className="font-black uppercase text-lg">Supplier directory</h2>
-      {loading ? <p>Loading…</p> : suppliers.length===0 ? <p className="text-sm text-zinc-500">No suppliers added yet.</p> : suppliers.map(s=><div key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 py-3"><div><strong>{s.name}</strong><p className="text-xs text-zinc-500">{[s.owner_name,s.phone,s.email,s.gst_number,[s.city,s.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={()=>editSupplier(s)} className="px-3 py-1 border-2 border-black bg-white text-[10px] font-black uppercase">Edit details</button></div>)}
-    </section>
-    <section className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
-      <h2 className="font-black uppercase text-lg">Supplier directory</h2>
-      {loading ? <p>Loading…</p> : suppliers.length===0 ? <p className="text-sm text-zinc-500">No suppliers added yet.</p> : suppliers.map(s=><div key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 py-3"><div><strong>{s.name}</strong><p className="text-xs text-zinc-500">{[s.owner_name,s.phone,s.email,s.gst_number,[s.city,s.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={()=>editSupplier(s)} className="px-3 py-1 border-2 border-black bg-white text-[10px] font-black uppercase">Edit details</button></div>)}
-    </section>
-    <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-      <div className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
-        <h2 className="font-black uppercase text-lg">Supplier balances</h2>
-        {loading ? <p>Loading…</p> : supplierBalances.length===0 ? <p className="text-sm text-zinc-500">No outstanding supplier balances.</p> : supplierBalances.map(s=><div key={s.id} className="flex justify-between border-b border-zinc-200 py-2"><span className="font-bold">{s.name}</span><strong>{money(s.due)}</strong></div>)}
-      </div>
-      <div className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
-        <h2 className="font-black uppercase text-lg">Customer balances</h2>
-        {loading ? <p>Loading…</p> : dueCustomers.length===0 ? <p className="text-sm text-zinc-500">No outstanding customer balances. New Store Credit sales will appear here when linked to a saved customer.</p> : dueCustomers.map(s=><div key={s.id} className="flex justify-between border-b border-zinc-200 py-2"><span className="font-bold">{s.name}<small className="block text-zinc-500">{s.phone}</small></span><strong>{money(s.due)}</strong></div>)}
-        <form onSubmit={collectCustomer} className="pt-3 border-t-2 border-black space-y-3">
-          <h3 className="font-black uppercase text-sm">Receive customer payment</h3>
-          <select required className={inputClass} value={customerPayId} onChange={e=>setCustomerPayId(e.target.value)}><option value="">Select customer</option>{dueCustomers.map(c=><option key={c.id} value={c.id}>{c.name} · Due {money(c.due)}</option>)}</select>
-          <input required className={inputClass} type="number" min="0.01" step="0.01" value={customerPayAmount} onChange={e=>setCustomerPayAmount(e.target.value)} placeholder="Amount received"/>
-          <select className={inputClass} value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}><option>Cash</option><option>UPI</option><option>Bank</option><option>Card</option><option>Cheque</option></select>
-          <button className={buttonClass} disabled={busy}>Record customer collection</button>
-        </form>
-      </div>
-    </section>
     <section className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000]">
       <h2 className="font-black uppercase text-lg mb-3">Purchase history</h2>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b-2 border-black text-xs uppercase"><th className="p-2">Date / Invoice</th><th className="p-2">Supplier</th><th className="p-2 text-right">Total</th><th className="p-2 text-right">Paid</th><th className="p-2 text-right">Due</th></tr></thead><tbody>{purchases.map(p=><tr key={p.id} className="border-b border-zinc-200"><td className="p-2">{new Date(p.timestamp).toLocaleDateString("en-IN")}<small className="block text-zinc-500">{p.invoice_number || p.id}</small></td><td className="p-2">{p.supplier_name}</td><td className="p-2 text-right">{money(Number(p.total_amount))}</td><td className="p-2 text-right">{money(Number(p.paid_amount))}</td><td className="p-2 text-right font-black">{money(Number(p.due_amount))}</td></tr>)}</tbody></table></div>
