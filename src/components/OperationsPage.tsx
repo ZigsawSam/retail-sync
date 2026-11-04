@@ -39,6 +39,8 @@ export default function OperationsPage({
   onAddExpense,
   productCategories = []
 }: OperationsPageProps) {
+  const configuredCategories = useMemo(() => productCategories.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => `${item.name} / ${sub}`) : [item.name]), [productCategories]);
+
   // Tabs for restock methods
   const [restockTab, setRestockTab] = useState<"quick" | "bulk" | "csv">("quick");
 
@@ -63,7 +65,7 @@ export default function OperationsPage({
   // --- Form States: Bulk Add ---
   const [bulkRows, setBulkRows] = useState<Partial<Product>[]>([
     { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
-    { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
+    { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
     { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }
   ]);
 
@@ -73,7 +75,6 @@ export default function OperationsPage({
   const [csvLogMessage, setCsvLogMessage] = useState("");
 
   // Categories list
-  const configuredCategories = useMemo(() => productCategories.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => `${item.name} / ${sub}`) : [item.name]), [productCategories]);
   const categories = useMemo(() => ["All", ...Array.from(new Set([...configuredCategories, ...products.map(p => p.category)]))], [products, configuredCategories]);
 
   // Filtered Inventory Stock Levels
