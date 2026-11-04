@@ -94,7 +94,7 @@ interface AppContextType {
   handleRestoreStaff: (id: string) => Promise<void>;
   handleMarkAttendance: (staffId: string, date: string, present: boolean, hoursWorked?: number) => Promise<void>;
 
-  handleAddSale: (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => Promise<void>;
+  handleAddSale: (sale: Omit<Sale, "id" | "processedBy" | "processedByName">) => Promise<void>;
   handleUpdateSale: (id: string, updates: Partial<Sale>) => Promise<void>;
   handleDeleteSale: (id: string) => Promise<void>;
 
@@ -654,22 +654,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setStaff((prev) => prev.map((s) => (s.id === staffId ? { ...s, attendance } : s)));
   };
 
-  const handleAddSale = async (sale: Omit<Sale, "id" | "timestamp" | "processedBy" | "processedByName">) => {
-    if (!currentUser) throw new Error("Not authenticated");
+  const handleAddSale = async (sale: Omit<Sale, "id" | "processedBy" | "processedByName">) => {
+    if (!currentUser || !tenantOwnerId) throw new Error("Not authenticated");
     if (staffSession && staffSession.role !== "cashier") throw new Error("Only cashiers can create sales.");
+    if (!sale.items?.length) throw new Error("A sale must contain at least one item.");
 
     const audit = getAuditFields();
-    const newSale = {
+    const salePayload = {
       ...sale,
       userId: tenantOwnerId,
-      timestamp: new Date().toISOString(),
+      timestamp: sale.timestamp || new Date().toISOString(),
+      clearanceStatus: sale.paymentMethod === "Cash" ? "Cleared" : (sale.clearanceStatus || "Pending"),
       processed_by: audit.processed_by || null,
       processed_by_name: audit.processed_by_name || null,
     };
 
-    const { data, error } = await supabase.from("sales").insert([newSale]).select().single();
+    // The database function inserts the invoice and deducts all item quantities
+    // in one transaction. Any missing/insufficient stock aborts the whole sale.
+    const { data, error } = await supabase.rpc("create_sale_and_deduct_stock", {
+      p_sale: salePayload,
+    });
     if (error) throw error;
-    setSales((prev) => [data, ...prev]);
+    if (!data) throw new Error("The sale could not be confirmed by the database.");
+
+    setSales((prev) => [data as Sale, ...prev]);
+    setProducts((prev) => prev.map((product) => {
+      const soldQuantity = sale.items
+        .filter((item) => item.productId === product.id)
+        .reduce((total, item) => total + Number(item.quantity || 0), 0);
+      return soldQuantity > 0 ? { ...product, quantity: product.quantity - soldQuantity } : product;
+    }));
   };
 
   const handleUpdateSale = async (id: string, updates: Partial<Sale>) => {
