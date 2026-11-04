@@ -103,6 +103,7 @@ interface AppContextType {
   handleDeleteExpense: (id: string) => Promise<void>;
 
   handleUpdateSettings: (updates: Partial<StoreSettings>) => Promise<void>;
+  refreshData: () => Promise<void>;
   handleResetDatabase: () => Promise<void>;
 
   handleAddCheque: (cheque: Omit<Cheque, "id" | "timestamp">) => Promise<void>;
@@ -366,14 +367,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const { data: settingsData } = await supabase.from("settings").select("*").eq("id", userId).maybeSingle();
       if (settingsData) {
         setSettings({
-          shopName: settingsData.shop_name || "My Shop",
-          taxRate: settingsData.tax_rate ?? 5,
+          shopName: settingsData.shopName || "My Shop",
+          taxRate: settingsData.taxRate ?? 5,
           currency: settingsData.currency || "Rs",
-          startingBalance: settingsData.starting_balance ?? 0,
-          quickAddProductIds: settingsData.quick_add_product_ids || [],
+          startingBalance: settingsData.startingBalance ?? 0,
+          quickAddProductIds: settingsData.quickAddProductIds || [],
           theme: settingsData.theme || "enterprise",
-          staffAccounts: settingsData.staff_accounts || {},
-          ownerPassword: settingsData.owner_password,
+          staffAccounts: settingsData.staffAccounts || {},
+          ownerPassword: settingsData.ownerPassword,
         });
       }
 
@@ -666,14 +667,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!currentUser || staffSession) throw new Error("Only the shop owner can change store settings.");
 
     const dbUpdates: any = {};
-    if (updates.shopName !== undefined) dbUpdates.shop_name = updates.shopName;
-    if (updates.taxRate !== undefined) dbUpdates.tax_rate = updates.taxRate;
+    if (updates.shopName !== undefined) dbUpdates.shopName = updates.shopName;
+    if (updates.taxRate !== undefined) dbUpdates.taxRate = updates.taxRate;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
-    if (updates.startingBalance !== undefined) dbUpdates.starting_balance = updates.startingBalance;
-    if (updates.quickAddProductIds !== undefined) dbUpdates.quick_add_product_ids = updates.quickAddProductIds;
+    if (updates.startingBalance !== undefined) dbUpdates.startingBalance = updates.startingBalance;
+    if (updates.quickAddProductIds !== undefined) dbUpdates.quickAddProductIds = updates.quickAddProductIds;
     if (updates.theme !== undefined) dbUpdates.theme = updates.theme;
-    if (updates.staffAccounts !== undefined) dbUpdates.staff_accounts = updates.staffAccounts;
-    if (updates.ownerPassword !== undefined) dbUpdates.owner_password = updates.ownerPassword;
+    if (updates.staffAccounts !== undefined) dbUpdates.staffAccounts = updates.staffAccounts;
+    if (updates.ownerPassword !== undefined) dbUpdates.ownerPassword = updates.ownerPassword;
 
     const { error } = await supabase.from("settings").update(dbUpdates).eq("id", tenantOwnerId);
     if (error) throw error;
@@ -820,6 +821,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         handleUpdateExpense,
         handleDeleteExpense,
         handleUpdateSettings,
+        refreshData: fetchAllData,
         handleResetDatabase,
         handleAddCheque,
         handleUpdateCheque,
