@@ -799,7 +799,7 @@ export default function Dashboard({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F5F2EB] p-8 text-black select-none font-sans">
+    <div className="w-full min-h-full bg-[#F5F2EB] p-4 md:p-8 text-black font-sans">
       
       {/* TOAST NOTIFICATION */}
       <AnimatePresence>
