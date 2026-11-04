@@ -81,6 +81,7 @@ export default function Sidebar({
     { id: "operations", label: "INVENTORY & PURCHASES", icon: Package, roles: ROUTE_ROLES.operations },
     { id: "parties", label: "PARTIES", icon: ContactRound, roles: ROUTE_ROLES.parties },
     { id: "payments", label: "PAYMENTS", icon: Wallet, roles: ROUTE_ROLES.payments },
+    { id: "agent-commissions", label: "AGENT COMMISSIONS", icon: Coins, roles: ROUTE_ROLES["agent-commissions"] },
     { id: "expenses", label: "EXPENSES", icon: ReceiptText, roles: ROUTE_ROLES.expenses },
     { id: "transactions", label: "TRANSACTION HISTORY", icon: History, roles: ROUTE_ROLES.transactions },
     { id: "insights", label: "LOYALTY INDEX", icon: TrendingUp, roles: ROUTE_ROLES.insights },

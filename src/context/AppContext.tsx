@@ -52,6 +52,8 @@ interface AppContextType {
   products: Product[];
   customers: Customer[];
   commissionAgents: CommissionAgent[];
+  commissionLedger: any[];
+  handleRecordAgentCommissionPayment: (agentPhone: string, amount: number, method: string, notes?: string) => Promise<void>;
   staff: Staff[];
   staffLogins: StaffLogin[];
   sales: Sale[];
