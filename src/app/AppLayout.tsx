@@ -85,7 +85,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const themeClassName = `theme-${activeTheme}`;
 
   return (
-    <div className={`flex min-h-screen w-full overflow-x-hidden font-sans bg-[#FAF8F5] text-zinc-900 ${themeClassName}`}>
+    <div className={`flex h-screen max-h-screen w-full overflow-hidden font-sans bg-[#FAF8F5] text-zinc-900 ${themeClassName}`}>
       {/* Persistent Sidebar */}
       <Sidebar 
         activeTab={activeTab} 
