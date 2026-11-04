@@ -753,7 +753,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.rpc("staff_create_expense", { p_expense: expense });
       if (error) throw error;
       setExpenses((prev) => [data as Expense, ...prev]);
-      setStaffExpensesTotal((prev) => prev + Number((data as any)?.amount ?? expense.amount));
+      if (!expense.paymentMethod || expense.paymentMethod === "Cash") setStaffExpensesTotal((prev) => prev + Number((data as any)?.amount ?? expense.amount));
       return;
     }
 
