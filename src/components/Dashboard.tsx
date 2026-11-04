@@ -51,6 +51,7 @@ interface DashboardProps {
   products: Product[];
   sales: Sale[];
   expenses: Expense[];
+  commissionLedger?: any[];
   staff: Staff[];
   settings: StoreSettings;
   setActiveTab: (tab: string) => void;
@@ -79,7 +80,8 @@ interface DashboardProps {
 export default function Dashboard({ 
   products, 
   sales, 
-  expenses, 
+  expenses,
+  commissionLedger = [],
   staff, 
   settings, 
   setActiveTab,
@@ -468,18 +470,8 @@ export default function Dashboard({
 
   const pendingStaffPayment = Math.max(0, totalStaffWagesEarned - totalStaffWagesPaid);
 
-  const totalAgentCommissionsEarned = useMemo(() => {
-    return sales
-      .filter(s => s.commissionAgent)
-      .reduce((acc, s) => acc + (s.commissionAgent?.commissionAmount || 0), 0);
-  }, [sales]);
-
-  const totalAgentCommissionsPaid = useMemo(() => {
-    return expenses
-      .filter(e => e.category === "Agent Commission")
-      .reduce((acc, e) => acc + e.amount, 0);
-  }, [expenses]);
-
+  const totalAgentCommissionsEarned = useMemo(() => commissionLedger.reduce((total, row) => total + Number(row.commission_amount || 0), 0), [commissionLedger]);
+  const totalAgentCommissionsPaid = useMemo(() => commissionLedger.reduce((total, row) => total + Number(row.paid_amount || 0), 0), [commissionLedger]);
   const pendingAgentPayment = Math.max(0, totalAgentCommissionsEarned - totalAgentCommissionsPaid);
   const pendingPaymentsTotal = pendingStaffPayment + pendingAgentPayment;
 
