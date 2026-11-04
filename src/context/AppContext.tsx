@@ -37,6 +37,13 @@ interface AppContextType {
   currentUser: any;
   staffSession: StaffSession | null;
   isLoading: boolean;
+  currentRole: ERPRole;
+  operatorRole: ERPRole;
+  cashInHand: number;
+  currency: string;
+  supabaseError: any;
+  setSupabaseError: (error: any) => void;
+  handleRoleChange: (role: ERPRole) => void;
 
   // Data
   products: Product[];
@@ -104,6 +111,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [staffSession, setStaffSession] = useState<StaffSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedRole, setSelectedRole] = useState<ERPRole>("admin");
+  const [supabaseError, setSupabaseError] = useState<any>(null);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -320,6 +329,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleSwitchOperator = async (role: ERPRole) => {
     if (role === "admin") {
       setStaffSession(null);
+      setSelectedRole("admin");
       sessionStorage.removeItem("staffSession");
       return;
     }
@@ -345,6 +355,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
 
     setStaffSession(session);
+    setSelectedRole(role);
+  };
+
+  const handleRoleChange = (role: ERPRole) => {
+    if (!staffSession) setSelectedRole(role);
   };
 
   // ============================================
@@ -604,6 +619,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setElectronicTxs((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const currentRole: ERPRole = staffSession?.role ?? selectedRole;
+  const operatorRole: ERPRole = staffSession?.role ?? selectedRole;
+  const cashInHand =
+    Number(settings.startingBalance || 0) +
+    sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) -
+    expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0);
+  const currency = settings.currency || "Rs";
+
   const lowStockProducts = products.filter((p) => p.quantity <= p.lowStockLimit);
   const overstockProducts = products.filter((p) => p.quantity >= p.overstockLimit);
 
@@ -613,6 +636,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currentUser,
         staffSession,
         isLoading,
+        currentRole,
+        operatorRole,
+        cashInHand,
+        currency,
+        supabaseError,
+        setSupabaseError,
+        handleRoleChange,
         products,
         customers,
         commissionAgents,
