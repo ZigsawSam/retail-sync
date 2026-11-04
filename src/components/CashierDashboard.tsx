@@ -238,7 +238,7 @@ export default function CashierDashboard({
   const drawerDiscrepancy = actualDrawerCash !== null ? actualDrawerCash - expectedDrawerCash : null;
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#FAF9F6] p-8 text-black select-none font-sans">
+    <div className="w-full min-h-full bg-[#FAF9F6] p-4 md:p-8 text-black font-sans">
       
       {/* Toast Alert */}
       <AnimatePresence>
