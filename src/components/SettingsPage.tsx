@@ -27,6 +27,16 @@ export default function SettingsPage({
   onRefresh,
 }: SettingsPageProps) {
   const [shopName, setShopName] = useState(settings.shopName);
+  const [shopCategory, setShopCategory] = useState(settings.shopCategory || "");
+  const [shopSubcategory, setShopSubcategory] = useState(settings.shopSubcategory || "");
+  const [productCategories, setProductCategories] = useState(settings.productCategories || []);
+  const [expenseCategories, setExpenseCategories] = useState(settings.expenseCategories || []);
+  const [newProductCategory, setNewProductCategory] = useState("");
+  const [newProductSubcategory, setNewProductSubcategory] = useState("");
+  const [selectedProductCategory, setSelectedProductCategory] = useState("");
+  const [newExpenseCategory, setNewExpenseCategory] = useState("");
+  const [newExpenseSubcategory, setNewExpenseSubcategory] = useState("");
+  const [selectedExpenseCategory, setSelectedExpenseCategory] = useState("");
   const [taxRate, setTaxRate] = useState(settings.taxRate);
   const [currency, setCurrency] = useState(settings.currency);
   const [startingBalance, setStartingBalance] = useState(settings.startingBalance);
@@ -45,6 +55,10 @@ export default function SettingsPage({
   // Settings are fetched asynchronously after authentication; keep the form in sync.
   useEffect(() => {
     setShopName(settings.shopName || "");
+    setShopCategory(settings.shopCategory || "");
+    setShopSubcategory(settings.shopSubcategory || "");
+    setProductCategories(settings.productCategories || []);
+    setExpenseCategories(settings.expenseCategories || []);
     setTaxRate(settings.taxRate ?? 5);
     setCurrency(settings.currency || "Rs");
     setStartingBalance(settings.startingBalance ?? 0);
@@ -62,6 +76,10 @@ export default function SettingsPage({
     try {
       await onUpdateSettings({
         shopName,
+        shopCategory,
+        shopSubcategory,
+        productCategories,
+        expenseCategories,
         taxRate,
         currency,
         startingBalance,
@@ -181,6 +199,56 @@ export default function SettingsPage({
           </div>
           <p className="text-xs leading-relaxed text-zinc-600">Your selection is applied across the whole app after you click <strong>Save Settings</strong> below. It is stored with your shop preferences.</p>
         </div>
+      </section>
+
+      {/* Shop type and owner-managed categories */}
+      <section className="rounded-none border-2 border-black bg-white p-5 md:p-6 space-y-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <div>
+          <h2 className="text-lg font-black uppercase tracking-tight text-black">Business Type & Categories</h2>
+          <p className="text-sm text-zinc-600">These settings belong to this shop only. Only the shop owner can change category lists.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-[10px] font-black uppercase mb-2">Shop Category</label>
+            <select value={shopCategory} onChange={(e) => { setShopCategory(e.target.value); setShopSubcategory(""); }} className="w-full border-2 border-black bg-white px-3 py-2 text-sm">
+              <option value="">Select business type</option>
+              {["Grocery & Convenience","Fashion & Apparel","Electronics","Pharmacy & Healthcare","Hardware & Building Supplies","Home & Furniture","Beauty & Personal Care","Restaurant & Food Service","Stationery & Books","General Retail","Other"].map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase mb-2">Shop Subcategory</label>
+            <input value={shopSubcategory} onChange={(e) => setShopSubcategory(e.target.value)} placeholder="e.g. Supermarket, Kirana, Mobile Store" className="w-full border-2 border-black px-3 py-2 text-sm" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <div className="space-y-3 border-2 border-black p-4">
+            <h3 className="font-black uppercase text-sm">Product Categories</h3>
+            <div className="flex gap-2">
+              <input value={newProductCategory} onChange={e => setNewProductCategory(e.target.value)} placeholder="New category" className="min-w-0 flex-1 border-2 border-black px-2 py-2 text-sm" />
+              <button type="button" onClick={() => { const name=newProductCategory.trim(); if(name && !productCategories.some((x:any)=>x.name.toLowerCase()===name.toLowerCase())) setProductCategories([...productCategories,{name,subcategories:[]}]); setNewProductCategory(""); }} className="border-2 border-black bg-[#FFC300] px-3 text-xs font-black">ADD</button>
+            </div>
+            <div className="flex gap-2">
+              <select value={selectedProductCategory} onChange={e=>setSelectedProductCategory(e.target.value)} className="min-w-0 flex-1 border-2 border-black px-2 py-2 text-sm"><option value="">Choose category</option>{productCategories.map((x:any)=><option key={x.name} value={x.name}>{x.name}</option>)}</select>
+              <input value={newProductSubcategory} onChange={e=>setNewProductSubcategory(e.target.value)} placeholder="Subcategory" className="min-w-0 flex-1 border-2 border-black px-2 py-2 text-sm" />
+              <button type="button" onClick={()=>{const name=newProductSubcategory.trim(); if(selectedProductCategory && name) setProductCategories(productCategories.map((x:any)=>x.name===selectedProductCategory?{...x,subcategories:Array.from(new Set([...x.subcategories,name]))}:x)); setNewProductSubcategory("");}} className="border-2 border-black px-3 text-xs font-black">ADD</button>
+            </div>
+            <div className="space-y-1 text-xs">{productCategories.map((x:any)=><div key={x.name} className="flex justify-between gap-2 border-b py-1"><span><strong>{x.name}</strong>{x.subcategories?.length ? " · "+x.subcategories.join(", ") : ""}</span><button type="button" onClick={()=>setProductCategories(productCategories.filter((v:any)=>v.name!==x.name))} className="text-red-700 font-bold">Remove</button></div>)}</div>
+          </div>
+          <div className="space-y-3 border-2 border-black p-4">
+            <h3 className="font-black uppercase text-sm">Expense Categories</h3>
+            <div className="flex gap-2">
+              <input value={newExpenseCategory} onChange={e => setNewExpenseCategory(e.target.value)} placeholder="New category" className="min-w-0 flex-1 border-2 border-black px-2 py-2 text-sm" />
+              <button type="button" onClick={() => { const name=newExpenseCategory.trim(); if(name && !expenseCategories.some((x:any)=>x.name.toLowerCase()===name.toLowerCase())) setExpenseCategories([...expenseCategories,{name,subcategories:[]}]); setNewExpenseCategory(""); }} className="border-2 border-black bg-[#FFC300] px-3 text-xs font-black">ADD</button>
+            </div>
+            <div className="flex gap-2">
+              <select value={selectedExpenseCategory} onChange={e=>setSelectedExpenseCategory(e.target.value)} className="min-w-0 flex-1 border-2 border-black px-2 py-2 text-sm"><option value="">Choose category</option>{expenseCategories.map((x:any)=><option key={x.name} value={x.name}>{x.name}</option>)}</select>
+              <input value={newExpenseSubcategory} onChange={e=>setNewExpenseSubcategory(e.target.value)} placeholder="Subcategory" className="min-w-0 flex-1 border-2 border-black px-2 py-2 text-sm" />
+              <button type="button" onClick={()=>{const name=newExpenseSubcategory.trim(); if(selectedExpenseCategory && name) setExpenseCategories(expenseCategories.map((x:any)=>x.name===selectedExpenseCategory?{...x,subcategories:Array.from(new Set([...x.subcategories,name]))}:x)); setNewExpenseSubcategory("");}} className="border-2 border-black px-3 text-xs font-black">ADD</button>
+            </div>
+            <div className="space-y-1 text-xs">{expenseCategories.map((x:any)=><div key={x.name} className="flex justify-between gap-2 border-b py-1"><span><strong>{x.name}</strong>{x.subcategories?.length ? " · "+x.subcategories.join(", ") : ""}</span><button type="button" onClick={()=>setExpenseCategories(expenseCategories.filter((v:any)=>v.name!==x.name))} className="text-red-700 font-bold">Remove</button></div>)}</div>
+          </div>
+        </div>
+        <p className="text-xs text-zinc-600">Add or remove categories here, then use Save Settings. Staff can select configured categories but cannot edit this list.</p>
       </section>
 
       {/* Store Settings */}
