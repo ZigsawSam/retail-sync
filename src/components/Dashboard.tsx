@@ -11,8 +11,6 @@ import {
   Bell,
   ArrowRight,
   Users,
-  Plus,
-  Trash2,
   FileText,
   CreditCard,
   Check,
@@ -26,7 +24,6 @@ import {
   Percent,
   Layers,
   CheckCircle2,
-  BookOpen
 } from "lucide-react";
 import { 
   AreaChart, 
@@ -40,8 +37,6 @@ import {
 import { Product, Sale, Expense, Staff, StoreSettings, Cheque, ElectronicTx, Customer, ERPRole } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { isToday, getShopLocalISOString, SHOP_TODAY_STR } from "../lib/dateUtils";
-const getDateInputToday = () => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
-const timestampForSelectedDate = (date: string) => date+"T12:00:00-07:00";
 
 
 import CashierDashboard from "./CashierDashboard";
@@ -71,7 +66,6 @@ interface DashboardProps {
   showInvoiceForm?: boolean;
   setShowInvoiceForm?: (val: boolean) => void;
   onAddExpense: (expense: Expense) => void;
-  onDeleteExpense: (id: string) => void;
   currentRole?: ERPRole;
   onAddProduct: (prod: Product) => void;
   onUpdateProductStock: (id: string, qty: number) => void;
@@ -101,7 +95,6 @@ export default function Dashboard({
   showInvoiceForm,
   setShowInvoiceForm,
   onAddExpense,
-  onDeleteExpense,
   currentRole = "admin",
   onAddProduct,
   onUpdateProductStock
@@ -148,16 +141,6 @@ export default function Dashboard({
   const [showAllTransactionsModal, setShowAllTransactionsModal] = useState(false);
   const [currencyToggle, setCurrencyToggle] = useState(settings.currency);
 
-  // Progressive disclosure states for detailed tables
-  const [discloseTransactions, setDiscloseTransactions] = useState(false);
-  const [discloseExpenses, setDiscloseExpenses] = useState(false);
-
-  // Quick Expense Form States
-  const [expCategory, setExpCategory] = useState<string>("Other");
-  const [expAmount, setExpAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(getDateInputToday);
-  const [expDesc, setExpDesc] = useState("");
-  const [expPaymentMethod, setExpPaymentMethod] = useState("Cash");
 
   // Drawer Cash Prompt Form States
   const [promptDrawerCash, setPromptDrawerCash] = useState("");
@@ -197,29 +180,7 @@ export default function Dashboard({
     }, 3000);
   };
 
-  const handleQuickAddExpense = (e: React.FormEvent) => {
-    e.preventDefault();
-    const amt = parseFloat(expAmount);
-    if (!amt || amt <= 0) return;
 
-    const newExp: Expense = {
-      id: "exp-" + Date.now(),
-      category: expCategory,
-      amount: amt,
-      description: expDesc || `${expCategory} expense`,
-      timestamp: timestampForSelectedDate(expenseDate),
-      paymentMethod: expPaymentMethod
-    };
-
-    onAddExpense(newExp);
-    triggerToast(`Expense of ${currencyToggle}${amt.toLocaleString()} recorded in Cash Book successfully!`);
-
-    // Reset fields
-    setExpAmount("");
-    setExpDesc("");
-    setExpCategory("Other");
-    setExpPaymentMethod("Cash");
-  };
 
   // --- COMPUTE TODAY'S GENERAL STATS ---
   const todaySales = useMemo(() => {
@@ -238,10 +199,6 @@ export default function Dashboard({
     return expenses.filter(e => isToday(e.timestamp));
   }, [expenses]);
 
-  const todayExpensesTotal = useMemo(() => {
-    return todayExpenses.reduce((acc, e) => acc + e.amount, 0);
-  }, [todayExpenses]);
-
   // Today's expenses by payment method
   const todayCashExpenses = useMemo(() => {
     return todayExpenses
@@ -258,24 +215,6 @@ export default function Dashboard({
   const drawerWithdrawalsToday = useMemo(() => {
     return todayExpenses
       .filter(e => e.category === "Drawer Cash Withdrawal")
-      .reduce((sum, e) => sum + e.amount, 0);
-  }, [todayExpenses]);
-
-  const todayUpiExpenses = useMemo(() => {
-    return todayExpenses
-      .filter(e => e.paymentMethod === "UPI")
-      .reduce((sum, e) => sum + e.amount, 0);
-  }, [todayExpenses]);
-
-  const todayChequeExpenses = useMemo(() => {
-    return todayExpenses
-      .filter(e => e.paymentMethod === "Cheque")
-      .reduce((sum, e) => sum + e.amount, 0);
-  }, [todayExpenses]);
-
-  const todayCardExpenses = useMemo(() => {
-    return todayExpenses
-      .filter(e => e.paymentMethod === "Card" || e.paymentMethod === "Credit/Debit Card")
       .reduce((sum, e) => sum + e.amount, 0);
   }, [todayExpenses]);
 
