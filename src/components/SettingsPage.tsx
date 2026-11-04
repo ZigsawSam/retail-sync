@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getSupabaseClient } from "../lib/supabase";
 import type { StoreSettings, Product, Staff, StaffLogin } from "../types";
 
@@ -41,6 +41,17 @@ export default function SettingsPage({
   const [terminalRole, setTerminalRole] = useState<"cashier" | "inventory_manager">("cashier");
   const [terminalEmail, setTerminalEmail] = useState("");
   const [isOnboarding, setIsOnboarding] = useState(false);
+
+  // Settings are fetched asynchronously after authentication; keep the form in sync.
+  useEffect(() => {
+    setShopName(settings.shopName || "");
+    setTaxRate(settings.taxRate ?? 5);
+    setCurrency(settings.currency || "Rs");
+    setStartingBalance(settings.startingBalance ?? 0);
+    setTheme(settings.theme || "enterprise");
+    setOwnerPassword(settings.ownerPassword || "");
+    setQuickAddIds(settings.quickAddProductIds || []);
+  }, [settings]);
 
   const activeLogins = staffLogins.filter((l) => l.isActive);
   const terminatedLogins = staffLogins.filter((l) => !l.isActive);
@@ -134,8 +145,8 @@ export default function SettingsPage({
   );
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8">
-      <h1 className="text-2xl font-bold">Settings</h1>
+    <div className="w-full max-w-5xl mx-auto px-4 py-6 md:px-8 md:py-8 space-y-6 text-slate-900">
+      <div className="flex flex-col gap-1"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Workspace configuration</p><h1 className="text-3xl font-semibold tracking-tight text-slate-900">Settings</h1><p className="text-sm text-slate-600">Manage your store profile, preferences and staff access.</p></div>
 
       {message && (
         <div className={`p-3 rounded ${message.includes("Error") ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
@@ -144,16 +155,16 @@ export default function SettingsPage({
       )}
 
       {/* Store Settings */}
-      <section className="border rounded-lg p-4 space-y-4">
-        <h2 className="text-lg font-semibold">Store Settings</h2>
+      <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-900">Store Settings</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Shop Name</label>
+            <label className="mb-1.5 block text-sm font-medium text-slate-700">Shop Name</label>
             <input
               type="text"
               value={shopName}
               onChange={(e) => setShopName(e.target.value)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
           </div>
           <div>
@@ -237,14 +248,14 @@ export default function SettingsPage({
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 disabled:opacity-50"
+          className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
         >
           {isSaving ? "Saving..." : "Save Settings"}
         </button>
       </section>
 
       {/* Your Onboarded Staff */}
-      <section className="border rounded-lg p-4 space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
         <h2 className="text-lg font-semibold">Your Onboarded Staff</h2>
         {staff.length === 0 ? (
           <p className="text-gray-500">No staff onboarded yet. Add staff in the Staff Management section.</p>
@@ -263,18 +274,18 @@ export default function SettingsPage({
                   <div className="flex items-center gap-2">
                     {login ? (
                       <>
-                        <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                        <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700">
                           ● LOGIN ACTIVE ({login.role})
                         </span>
                         <button
                           onClick={() => handleTerminate(login.id)}
-                          className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"
+                          className="rounded-md bg-red-50 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
                         >
                           Terminate
                         </button>
                       </>
                     ) : (
-                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-1 rounded-full">
+                      <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
                         No terminal access
                       </span>
                     )}
@@ -287,7 +298,7 @@ export default function SettingsPage({
       </section>
 
       {/* Assign Terminal Access */}
-      <section className="border rounded-lg p-4 space-y-4">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
         <h2 className="text-lg font-semibold">Assign Terminal Access</h2>
         <p className="text-sm text-gray-500">
           Send an invitation to the staff member’s individual email address. They will set their own password through Supabase Auth. Multiple cashiers and inventory managers can be active at the same time.
@@ -338,7 +349,7 @@ export default function SettingsPage({
         <button
           onClick={handleAssignTerminalAccess}
           disabled={isOnboarding || !selectedStaffId}
-          className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
+          className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           {isOnboarding ? "Sending invitation..." : "Send Staff Invitation"}
         </button>
@@ -346,7 +357,7 @@ export default function SettingsPage({
 
       {/* Login History */}
       {terminatedLogins.length > 0 && (
-        <section className="border rounded-lg p-4 space-y-4">
+        <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
           <h2 className="text-lg font-semibold">Terminal Access History</h2>
           <div className="space-y-2">
             {terminatedLogins.map((l) => (
@@ -365,7 +376,7 @@ export default function SettingsPage({
       )}
 
       {/* Danger Zone */}
-      <section className="border border-red-200 rounded-lg p-4 space-y-4">
+      <section className="rounded-xl border border-red-200 bg-white p-5 md:p-6 space-y-4">
         <h2 className="text-lg font-semibold text-red-600">Danger Zone</h2>
         <button
           onClick={handleReset}
