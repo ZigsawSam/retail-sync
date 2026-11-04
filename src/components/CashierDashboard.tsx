@@ -35,7 +35,7 @@ interface CashierDashboardProps {
   actualDrawerCash: number | null;
   currency: string;
   expenses?: Expense[];
-  onAddExpense?: (expense: Expense) => void;
+  onAddExpense?: (expense: Expense) => Promise<void> | void;
 }
 
 export default function CashierDashboard({
@@ -170,7 +170,7 @@ export default function CashierDashboard({
     setCashierDrawerInput("");
   };
 
-  const handleCashierExpenseSubmit = (e: React.FormEvent) => {
+  const handleCashierExpenseSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(expAmount);
     if (isNaN(amt) || amt <= 0) {
@@ -191,8 +191,13 @@ export default function CashierDashboard({
       paymentMethod: expPaymentMethod
     };
 
-    onAddExpense(newExpense);
-    triggerToast(`Logged ${currency}${amt.toLocaleString()} expense under ${expCategory} successfully!`);
+    try {
+      await onAddExpense(newExpense);
+      triggerToast(`Logged ${currency}${amt.toLocaleString()} expense under ${expCategory} successfully!`);
+    } catch (error: any) {
+      triggerToast(error?.message || "Expense could not be saved.");
+      return;
+    }
     
     setExpAmount("");
     setExpDesc("");
@@ -200,7 +205,7 @@ export default function CashierDashboard({
     setExpPaymentMethod("Cash");
   };
 
-  const handleCashierDrawerAdjustSubmit = (e: React.FormEvent) => {
+  const handleCashierDrawerAdjustSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const amt = parseFloat(drawerAmount);
     if (isNaN(amt) || amt <= 0) {
@@ -221,8 +226,8 @@ export default function CashierDashboard({
         timestamp: getShopLocalISOString(),
         paymentMethod: "Cash"
       };
-      onAddExpense(newAdjustment);
-      triggerToast(`Added ${currency}${amt.toLocaleString()} float to cash drawer successfully!`);
+      try { await onAddExpense(newAdjustment); triggerToast(`Added ${currency}${amt.toLocaleString()} float to cash drawer successfully!`); }
+      catch (error: any) { triggerToast(error?.message || "Drawer adjustment could not be saved."); return; }
     } else {
       const newAdjustment: Expense = {
         id: "exp-sub-" + Date.now(),
@@ -232,8 +237,8 @@ export default function CashierDashboard({
         timestamp: getShopLocalISOString(),
         paymentMethod: "Cash"
       };
-      onAddExpense(newAdjustment);
-      triggerToast(`Withdrew ${currency}${amt.toLocaleString()} from cash drawer successfully!`);
+      try { await onAddExpense(newAdjustment); triggerToast(`Withdrew ${currency}${amt.toLocaleString()} from cash drawer successfully!`); }
+      catch (error: any) { triggerToast(error?.message || "Drawer adjustment could not be saved."); return; }
     }
 
     setDrawerAmount("");
