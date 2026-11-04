@@ -21,6 +21,8 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [shopName, setShopName] = useState("");
+  const [shopCategory, setShopCategory] = useState("");
+  const [shopSubcategory, setShopSubcategory] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showConfigHelp, setShowConfigHelp] = useState(false);
@@ -80,7 +82,7 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
 };
 
   // Helper to seed standard initial demo data for a newly registered user/shop
-  const seedNewShopData = async (uid: string, nameOfShop: string) => {
+  const seedNewShopData = async (uid: string, nameOfShop: string, businessCategory: string, businessSubcategory: string) => {
     try {
       const supabase = getSupabaseClient();
       if (!supabase) return;
@@ -88,6 +90,10 @@ export default function AuthPage({ onAuthSuccess }: AuthPageProps) {
       const defaultSettings = {
         id: uid,
         shopName: nameOfShop,
+        shop_category: businessCategory,
+        shop_subcategory: businessSubcategory,
+        product_categories: [],
+        expense_categories: [],
         taxRate: 5,
         startingBalance: 12500,
         currency: "Rs.",
@@ -283,7 +289,8 @@ if (!foundStaffMatch && supabase) {
         // D. Fall back to standard owner Supabase login if no staff account match is found
         const { data, error: err } = await supabase.auth.signInWithPassword({
           email,
-          password
+          password,
+          options: { data: { shop_name: shopName.trim(), shop_category: shopCategory, shop_subcategory: shopSubcategory.trim() } }
         });
         setAppMode("online");
 
@@ -301,6 +308,16 @@ localStorage.removeItem("retail_sync_local_user");
       } else {
         if (!shopName.trim()) {
           setError("Please specify a Shop/Retail Outlet Name.");
+          setLoading(false);
+          return;
+        }
+        if (!shopCategory) {
+          setError("Please select your shop category.");
+          setLoading(false);
+          return;
+        }
+        if (!shopSubcategory.trim()) {
+          setError("Please enter your shop subcategory.");
           setLoading(false);
           return;
         }
@@ -336,7 +353,7 @@ localStorage.removeItem("retail_sync_local_user");
         // Email confirmation is disabled, user has an active session
         if (data?.user) {
           // Seed customized demo ledger data securely
-          await seedNewShopData(data.user.id, shopName.trim());
+          await seedNewShopData(data.user.id, shopName.trim(), shopCategory, shopSubcategory.trim());
         }
 
         setVerificationSuccessMessage("Successfully registered and shop initialized!");
@@ -543,6 +560,20 @@ localStorage.removeItem("retail_sync_local_user");
                 </div>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5">Shop Category</label>
+                <select required value={shopCategory} onChange={e=>{setShopCategory(e.target.value);setShopSubcategory("");}} className="w-full border-2 border-black bg-white px-3 py-2.5 text-sm font-bold">
+                  <option value="">Select business type</option>
+                  {["Grocery & Convenience","Fashion & Apparel","Electronics","Pharmacy & Healthcare","Hardware & Building Supplies","Home & Furniture","Beauty & Personal Care","Restaurant & Food Service","Stationery & Books","General Retail","Other"].map(v=><option key={v} value={v}>{v}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5">Shop Subcategory</label>
+                <input required value={shopSubcategory} onChange={e=>setShopSubcategory(e.target.value)} placeholder="e.g. Supermarket, Kirana, Mobile Store" className="w-full border-2 border-black px-3 py-2.5 text-sm font-bold" />
+              </div>
+            </div>
 
             <div>
               <label className="block text-[10px] font-black uppercase tracking-wider text-black font-mono mb-1.5">Operator Email Address</label>
