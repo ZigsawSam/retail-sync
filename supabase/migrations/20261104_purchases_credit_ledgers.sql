@@ -22,9 +22,27 @@ CREATE TABLE IF NOT EXISTS public.suppliers (
   name text NOT NULL,
   phone text,
   address text,
+  gst_number text,
+  owner_name text,
+  email text,
+  alternate_phone text,
+  city text,
+  state text,
+  postal_code text,
+  country text,
   notes text,
   created_at timestamptz NOT NULL DEFAULT now()
 );
+ALTER TABLE public.suppliers
+  ADD COLUMN IF NOT EXISTS gst_number text,
+  ADD COLUMN IF NOT EXISTS owner_name text,
+  ADD COLUMN IF NOT EXISTS email text,
+  ADD COLUMN IF NOT EXISTS alternate_phone text,
+  ADD COLUMN IF NOT EXISTS city text,
+  ADD COLUMN IF NOT EXISTS state text,
+  ADD COLUMN IF NOT EXISTS postal_code text,
+  ADD COLUMN IF NOT EXISTS country text;
+
 CREATE INDEX IF NOT EXISTS suppliers_user_idx ON public.suppliers ("userId");
 
 CREATE TABLE IF NOT EXISTS public.purchases (
@@ -69,7 +87,12 @@ CREATE POLICY "owners read purchases" ON public.purchases FOR SELECT TO authenti
 DROP POLICY IF EXISTS "owners read account payments" ON public.account_payments;
 CREATE POLICY "owners read account payments" ON public.account_payments FOR SELECT TO authenticated USING ("userId" = auth.uid()::text);
 
-CREATE OR REPLACE FUNCTION public.create_supplier(p_name text, p_phone text DEFAULT NULL, p_address text DEFAULT NULL, p_notes text DEFAULT NULL)
+CREATE OR REPLACE FUNCTION public.create_supplier(
+  p_name text, p_phone text DEFAULT NULL, p_address text DEFAULT NULL, p_notes text DEFAULT NULL,
+  p_gst_number text DEFAULT NULL, p_owner_name text DEFAULT NULL, p_email text DEFAULT NULL,
+  p_alternate_phone text DEFAULT NULL, p_city text DEFAULT NULL, p_state text DEFAULT NULL,
+  p_postal_code text DEFAULT NULL, p_country text DEFAULT NULL
+)
 RETURNS public.suppliers
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE v_owner uuid; v_row public.suppliers%ROWTYPE;
@@ -78,8 +101,37 @@ BEGIN
   v_owner := auth.uid();
   IF NOT EXISTS (SELECT 1 FROM public.settings WHERE id = v_owner::text) THEN RAISE EXCEPTION 'Shop owner account not found'; END IF;
   IF nullif(trim(p_name),'') IS NULL THEN RAISE EXCEPTION 'Supplier name is required'; END IF;
-  INSERT INTO public.suppliers("userId",name,phone,address,notes)
-  VALUES(v_owner::text,trim(p_name),nullif(trim(p_phone),''),nullif(trim(p_address),''),nullif(trim(p_notes),'')) RETURNING * INTO v_row;
+  INSERT INTO public.suppliers("userId",name,phone,address,notes,gst_number,owner_name,email,alternate_phone,city,state,postal_code,country)
+  VALUES(v_owner::text,trim(p_name),nullif(trim(p_phone),''),nullif(trim(p_address),''),nullif(trim(p_notes),''),
+    nullif(trim(p_gst_number),''),nullif(trim(p_owner_name),''),nullif(trim(p_email),''),
+    nullif(trim(p_alternate_phone),''),nullif(trim(p_city),''),nullif(trim(p_state),''),
+    nullif(trim(p_postal_code),''),nullif(trim(p_country),'')) RETURNING * INTO v_row;
+  RETURN v_row;
+END; $$;
+
+CREATE OR REPLACE FUNCTION public.update_supplier(
+  p_supplier_id uuid, p_name text DEFAULT NULL, p_phone text DEFAULT NULL,
+  p_address text DEFAULT NULL, p_gst_number text DEFAULT NULL, p_owner_name text DEFAULT NULL,
+  p_email text DEFAULT NULL, p_alternate_phone text DEFAULT NULL, p_city text DEFAULT NULL,
+  p_state text DEFAULT NULL, p_postal_code text DEFAULT NULL, p_country text DEFAULT NULL,
+  p_notes text DEFAULT NULL
+)
+RETURNS public.suppliers
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_owner uuid; v_row public.suppliers%ROWTYPE;
+BEGIN
+  IF auth.uid() IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
+  v_owner := auth.uid();
+  IF NOT EXISTS (SELECT 1 FROM public.settings WHERE id = v_owner::text) THEN RAISE EXCEPTION 'Shop owner account not found'; END IF;
+  IF nullif(trim(COALESCE(p_name,'')),'') IS NULL THEN RAISE EXCEPTION 'Supplier name is required'; END IF;
+  UPDATE public.suppliers SET name=trim(p_name), phone=nullif(trim(p_phone),''), address=nullif(trim(p_address),''),
+    gst_number=nullif(trim(p_gst_number),''), owner_name=nullif(trim(p_owner_name),''),
+    email=nullif(trim(p_email),''), alternate_phone=nullif(trim(p_alternate_phone),''),
+    city=nullif(trim(p_city),''), state=nullif(trim(p_state),''),
+    postal_code=nullif(trim(p_postal_code),''), country=nullif(trim(p_country),''),
+    notes=nullif(trim(p_notes),'')
+  WHERE id=p_supplier_id AND "userId"=v_owner::text RETURNING * INTO v_row;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Supplier not found'; END IF;
   RETURN v_row;
 END; $$;
 
@@ -167,7 +219,8 @@ BEGIN
   RETURN v_due-p_amount;
 END; $$;
 
-GRANT EXECUTE ON FUNCTION public.create_supplier(text,text,text,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_supplier(text,text,text,text,text,text,text,text,text,text,text,text) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.update_supplier(uuid,text,text,text,text,text,text,text,text,text,text,text,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.create_purchase(jsonb) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.record_supplier_payment(uuid,numeric,text,text) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.record_customer_payment(text,numeric,text,text) TO authenticated;

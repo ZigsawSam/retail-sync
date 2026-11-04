@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { useApp } from "../context/AppContext";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
-type Supplier = { id: string; name: string; phone?: string | null };
+type Supplier = { id: string; name: string; phone?: string | null; address?: string | null; gst_number?: string | null; owner_name?: string | null; email?: string | null; alternate_phone?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null; notes?: string | null };
 type Purchase = { id: string; supplier_id: string | null; supplier_name: string; invoice_number?: string | null; total_amount: number; paid_amount: number; due_amount: number; payment_method: string; timestamp: string };
 type DueCustomer = { id: string; name: string; phone: string; due: number };
 
@@ -14,6 +14,16 @@ const buttonClass = "px-4 py-2.5 border-2 border-black bg-[#FFC300] text-black t
 
 export default function AccountsPage() {
   const { currency, products, refreshData } = useApp();
+  const [productSource, setProductSource] = useState<"existing" | "new" | "">("");
+  const [showProductCreator, setShowProductCreator] = useState(false);
+  const [newProductMode, setNewProductMode] = useState<"quick" | "bulk" | "csv">("quick");
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductCategory, setNewProductCategory] = useState("");
+  const [newProductCost, setNewProductCost] = useState("");
+  const [newProductSelling, setNewProductSelling] = useState("");
+  const [newProductBarcode, setNewProductBarcode] = useState("");
+  const [bulkProductRows, setBulkProductRows] = useState([{name:"",category:"",cost:"",selling:"",barcode:""}]);
+  const [productImportMessage, setProductImportMessage] = useState("");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [dueCustomers, setDueCustomers] = useState<DueCustomer[]>([]);
@@ -22,6 +32,17 @@ export default function AccountsPage() {
   const [message, setMessage] = useState("");
   const [supplierName, setSupplierName] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
+  const [supplierAddress, setSupplierAddress] = useState("");
+  const [supplierGst, setSupplierGst] = useState("");
+  const [supplierOwner, setSupplierOwner] = useState("");
+  const [supplierEmail, setSupplierEmail] = useState("");
+  const [supplierAltPhone, setSupplierAltPhone] = useState("");
+  const [supplierCity, setSupplierCity] = useState("");
+  const [supplierState, setSupplierState] = useState("");
+  const [supplierPostal, setSupplierPostal] = useState("");
+  const [supplierCountry, setSupplierCountry] = useState("India");
+  const [supplierNotes, setSupplierNotes] = useState("");
+  const [editingSupplier, setEditingSupplier] = useState<string | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState("1");
@@ -43,7 +64,7 @@ export default function AccountsPage() {
     const user = auth.user;
     if (!user) { setMessage("Please sign in as the shop owner to use Accounts."); setLoading(false); return; }
     const [supplierRes, purchaseRes, salesRes] = await Promise.all([
-      supabase.from("suppliers").select("id,name,phone").eq("userId", user.id).order("name"),
+      supabase.from("suppliers").select("*").eq("userId", user.id).order("name"),
       supabase.from("purchases").select("*").eq("userId", user.id).order("timestamp", { ascending: false }),
       supabase.from("sales").select("customerId,customerName,customerPhone,dueAmount").eq("userId", user.id).gt("dueAmount", 0),
     ]);
@@ -82,21 +103,50 @@ export default function AccountsPage() {
     finally { setBusy(false); }
   };
 
+  const resetSupplierForm = () => {
+    setEditingSupplier(null); setSupplierName(""); setSupplierPhone(""); setSupplierAddress("");
+    setSupplierGst(""); setSupplierOwner(""); setSupplierEmail(""); setSupplierAltPhone("");
+    setSupplierCity(""); setSupplierState(""); setSupplierPostal(""); setSupplierCountry("India"); setSupplierNotes("");
+  };
+  const editSupplier = (supplier: Supplier) => {
+    setEditingSupplier(supplier.id); setSupplierName(supplier.name || ""); setSupplierPhone(supplier.phone || "");
+    setSupplierAddress(supplier.address || ""); setSupplierGst(supplier.gst_number || "");
+    setSupplierOwner(supplier.owner_name || ""); setSupplierEmail(supplier.email || "");
+    setSupplierAltPhone(supplier.alternate_phone || ""); setSupplierCity(supplier.city || "");
+    setSupplierState(supplier.state || ""); setSupplierPostal(supplier.postal_code || "");
+    setSupplierCountry(supplier.country || "India"); setSupplierNotes(supplier.notes || "");
+  };
   const addSupplier = (e: React.FormEvent) => {
     e.preventDefault();
     void run(async () => {
-      const { error } = await supabase.rpc("create_supplier", { p_name: supplierName, p_phone: supplierPhone || null, p_address: null, p_notes: null });
-      if (error) throw error;
-      setSupplierName(""); setSupplierPhone("");
+      const args = { p_name: supplierName, p_phone: supplierPhone || null, p_address: supplierAddress || null,
+        p_gst_number: supplierGst || null, p_owner_name: supplierOwner || null, p_email: supplierEmail || null,
+        p_alternate_phone: supplierAltPhone || null, p_city: supplierCity || null, p_state: supplierState || null,
+        p_postal_code: supplierPostal || null, p_country: supplierCountry || null, p_notes: supplierNotes || null };
+      const result = editingSupplier
+        ? await supabase.rpc("update_supplier", { p_supplier_id: editingSupplier, ...args })
+        : await supabase.rpc("create_supplier", args);
+      if (result.error) throw result.error;
+      resetSupplierForm();
     });
   };
 
+  const createCatalogProduct = async (row: {name:string;category:string;cost:string;selling:string;barcode:string}) => {
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) throw new Error("Please sign in as the shop owner.");
+    if (!row.name.trim() || Number(row.cost) < 0 || Number(row.selling) <= 0) throw new Error("Enter a product name, valid cost and selling price.");
+    const { data, error } = await supabase.from("products").insert([{ userId: auth.user.id, name: row.name.trim(), category: row.category || "Other", purchasePrice: Number(row.cost) || 0, sellingPrice: Number(row.selling), quantity: 0, barcode: row.barcode.trim() || "SKU-" + Date.now(), lowStockLimit: 5, overstockLimit: 40 }]).select().single();
+    if (error) throw error; return data;
+  };
+  const saveQuickProduct = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setProductImportMessage(""); try { const product = await createCatalogProduct({name:newProductName,category:newProductCategory,cost:newProductCost,selling:newProductSelling,barcode:newProductBarcode}); await refreshData(); setSelectedProduct(product.id); setProductSource("existing"); setShowProductCreator(false); setPurchasePrice(String(product.purchasePrice)); setNewProductName(""); setNewProductCost(""); setNewProductSelling(""); setNewProductBarcode(""); } catch(error:any) { setProductImportMessage(error?.message || "Unable to create product."); } finally { setBusy(false); } };
+  const saveBulkProducts = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setProductImportMessage(""); try { const rows=bulkProductRows.filter(row=>row.name.trim()); if(!rows.length) throw new Error("Add at least one product row."); const created=[]; for(const row of rows) created.push(await createCatalogProduct(row)); await refreshData(); setSelectedProduct(created[0].id); setProductSource("existing"); setPurchasePrice(String(created[0].purchasePrice)); setShowProductCreator(false); } catch(error:any) { setProductImportMessage(error?.message || "Bulk product creation failed."); } finally { setBusy(false); } };
+  const importProductsCsv = async (file: File) => { setBusy(true); setProductImportMessage(""); try { const raw=await file.text(); const lines=raw.split(/\r?\n/).filter(Boolean); const headers=lines.shift()?.split(",").map(x=>x.trim().toLowerCase()) || []; const idx=(names:string[])=>headers.findIndex(h=>names.includes(h)); const n=idx(["name","product name"]), cat=idx(["category"]), cost=idx(["purchaseprice","purchase_price","cost"]), selling=idx(["sellingprice","selling_price","mrp"]), barcode=idx(["barcode","sku"]); if(n<0||selling<0) throw new Error("CSV needs name and sellingPrice columns."); const auth=await supabase.auth.getUser(); if(!auth.data.user) throw new Error("Please sign in."); const rows=lines.map(line=>line.split(",")).filter(v=>v[n]?.trim()).map(v=>({userId:auth.data.user!.id,name:v[n].trim(),category:cat>=0?(v[cat]||"Other"):"Other",purchasePrice:cost>=0?Number(v[cost])||0:0,sellingPrice:Number(v[selling])||0,quantity:0,barcode:barcode>=0?(v[barcode]||"SKU-"+Date.now()):"SKU-"+Date.now(),lowStockLimit:5,overstockLimit:40})); if(!rows.length) throw new Error("No valid product rows found."); const {data,error}=await supabase.from("products").insert(rows).select(); if(error) throw error; await refreshData(); if(data?.[0]){setSelectedProduct(data[0].id);setProductSource("existing");setPurchasePrice(String(data[0].purchasePrice));} setShowProductCreator(false); } catch(error:any){setProductImportMessage(error?.message||"CSV import failed.");} finally{setBusy(false);} };
   const addPurchase = (e: React.FormEvent) => {
     e.preventDefault();
     const product = products.find(p => p.id === selectedProduct);
     const qty = Number(quantity); const cost = Number(purchasePrice || product?.purchasePrice || 0);
     const total = qty * cost; const paid = Number(paidAmount || 0);
-    if (!product || !Number.isInteger(qty) || qty <= 0 || cost < 0 || paid < 0 || paid > total || (paid < total && !selectedSupplier)) { setMessage("Check the product, quantity and paid amount. A supplier is required when any amount remains due."); return; }
+    if (productSource !== "existing" || !product || !Number.isInteger(qty) || qty <= 0 || cost < 0 || paid < 0 || paid > total || (paid < total && !selectedSupplier)) { setMessage("Check the product, quantity and paid amount. A supplier is required when any amount remains due."); return; }
     void run(async () => {
       const supplier = suppliers.find(s => s.id === selectedSupplier);
       const { error } = await supabase.rpc("create_purchase", { p_purchase: {
@@ -146,8 +196,18 @@ export default function AccountsPage() {
         <h2 className="font-black uppercase text-lg border-b-2 border-black pb-2">Record stock purchase</h2>
         <label className="block text-xs font-black uppercase">Supplier</label>
         <select className={inputClass} value={selectedSupplier} onChange={e=>setSelectedSupplier(e.target.value)}><option value="">Choose supplier (optional)</option>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
-        <label className="block text-xs font-black uppercase">Product</label>
-        <select required className={inputClass} value={selectedProduct} onChange={e=>{setSelectedProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);setPurchasePrice(p?String(p.purchasePrice):"");}}><option value="">Select existing product</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} — Stock: {p.quantity}</option>)}</select>
+                <label className="block text-xs font-black uppercase">Product source</label>
+        <div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>{setProductSource("existing");setSelectedProduct("");setPurchasePrice("");}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="existing"?"bg-[#FFC300]":"bg-white")}>Select existing product</button><button type="button" onClick={()=>{setProductSource("new");setShowProductCreator(true);}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="new"?"bg-[#FFC300]":"bg-white")}>Add new product</button></div>
+        {productSource==="existing" && <select required className={inputClass} value={selectedProduct} onChange={e=>{setSelectedProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);setPurchasePrice(p?String(p.purchasePrice):"");}}><option value="">Choose from existing catalogue</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} — Current stock: {p.quantity}</option>)}</select>}
+        {productSource==="new" && <p className="text-xs font-bold bg-zinc-100 p-2">New products are added to the catalogue with zero stock. This purchase invoice adds the purchased quantity.</p>}
+        {showProductCreator && <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-3"><div className="bg-[#FAF8F5] border-4 border-black shadow-[6px_6px_0_#000] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4">
+          <div className="flex justify-between items-center"><h3 className="text-lg font-black uppercase">Add products to catalogue</h3><button type="button" onClick={()=>setShowProductCreator(false)} className="border-2 border-black bg-white px-3 py-1 font-black">✕</button></div>
+          <div className="grid grid-cols-3 gap-2"><button type="button" onClick={()=>setNewProductMode("quick")} className={"border-2 border-black p-2 text-xs font-black uppercase "+(newProductMode==="quick"?"bg-[#FFC300]":"bg-white")}>Quick Add</button><button type="button" onClick={()=>setNewProductMode("bulk")} className={"border-2 border-black p-2 text-xs font-black uppercase "+(newProductMode==="bulk"?"bg-[#FFC300]":"bg-white")}>Bulk Add</button><button type="button" onClick={()=>setNewProductMode("csv")} className={"border-2 border-black p-2 text-xs font-black uppercase "+(newProductMode==="csv"?"bg-[#FFC300]":"bg-white")}>Import CSV</button></div>
+          {newProductMode==="quick" && <form onSubmit={saveQuickProduct} className="grid grid-cols-1 md:grid-cols-2 gap-3"><input required className={inputClass} value={newProductName} onChange={e=>setNewProductName(e.target.value)} placeholder="Product name"/><input className={inputClass} value={newProductCategory} onChange={e=>setNewProductCategory(e.target.value)} placeholder="Category (optional)"/><input required type="number" min="0" step="0.01" className={inputClass} value={newProductCost} onChange={e=>setNewProductCost(e.target.value)} placeholder="Purchase cost"/><input required type="number" min="0.01" step="0.01" className={inputClass} value={newProductSelling} onChange={e=>setNewProductSelling(e.target.value)} placeholder="Selling price / MRP"/><input className={inputClass} value={newProductBarcode} onChange={e=>setNewProductBarcode(e.target.value)} placeholder="Barcode / SKU (optional)"/><button disabled={busy} className={buttonClass}>Create product</button></form>}
+          {newProductMode==="bulk" && <form onSubmit={saveBulkProducts} className="space-y-3">{bulkProductRows.map((row,i)=><div key={i} className="grid grid-cols-2 md:grid-cols-5 gap-2">{(["name","category","cost","selling","barcode"] as const).map(field=><input key={field} className={inputClass} placeholder={field} value={row[field]} onChange={e=>setBulkProductRows(old=>old.map((x,j)=>j===i?{...x,[field]:e.target.value}:x))}/>)}</div>)}<div className="flex gap-2"><button type="button" onClick={()=>setBulkProductRows(old=>[...old,{name:"",category:"",cost:"",selling:"",barcode:""}])} className="border-2 border-black bg-white px-3 py-2 text-xs font-black">Add row</button><button disabled={busy} className={buttonClass}>Create products</button></div></form>}
+          {newProductMode==="csv" && <div className="space-y-3"><p className="text-xs font-bold">CSV columns: name, category, purchasePrice, sellingPrice, barcode. New product stock starts at zero.</p><input type="file" accept=".csv,text/csv" className={inputClass} onChange={e=>{const file=e.target.files?.[0];if(file)void importProductsCsv(file);}}/></div>}
+          {productImportMessage && <p className="p-3 border-2 border-black bg-amber-100 text-xs font-bold">{productImportMessage}</p>}
+        </div></div>}
         <div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-black uppercase mb-1">Quantity</label><input className={inputClass} type="number" min="1" step="1" required value={quantity} onChange={e=>setQuantity(e.target.value)}/></div><div><label className="block text-xs font-black uppercase mb-1">Cost per unit</label><input className={inputClass} type="number" min="0" step="0.01" required value={purchasePrice} onChange={e=>setPurchasePrice(e.target.value)}/></div></div>
         <div><label className="block text-xs font-black uppercase mb-1">Supplier invoice number</label><input className={inputClass} value={invoiceNumber} onChange={e=>setInvoiceNumber(e.target.value)} placeholder="Optional"/></div>
         <div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-black uppercase mb-1">Paid now</label><input className={inputClass} type="number" min="0" step="0.01" value={paidAmount} onChange={e=>setPaidAmount(e.target.value)} placeholder="0.00"/></div><div><label className="block text-xs font-black uppercase mb-1">Payment method</label><select className={inputClass} value={purchaseMethod} onChange={e=>setPurchaseMethod(e.target.value)}><option>Cash</option><option>UPI</option><option>Bank</option><option>Card</option><option>Cheque</option></select></div></div>
@@ -156,10 +216,23 @@ export default function AccountsPage() {
       </form>
       <div className="space-y-5">
         <form onSubmit={addSupplier} className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
-          <h2 className="font-black uppercase text-lg border-b-2 border-black pb-2">Add supplier</h2>
-          <input required className={inputClass} value={supplierName} onChange={e=>setSupplierName(e.target.value)} placeholder="Supplier / firm name"/>
-          <input className={inputClass} value={supplierPhone} onChange={e=>setSupplierPhone(e.target.value)} placeholder="Phone number (optional)"/>
-          <button className={buttonClass} disabled={busy}>Save supplier</button>
+          <h2 className="font-black uppercase text-lg border-b-2 border-black pb-2">{editingSupplier ? "Edit supplier details" : "Add supplier"}</h2>
+          <p className="text-[11px] text-zinc-500 font-bold">Only supplier name is required. All other details are optional.</p>
+          <input required className={inputClass} value={supplierName} onChange={e=>setSupplierName(e.target.value)} placeholder="Supplier / firm name *"/>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <input className={inputClass} value={supplierOwner} onChange={e=>setSupplierOwner(e.target.value)} placeholder="Owner / contact person"/>
+            <input className={inputClass} value={supplierGst} onChange={e=>setSupplierGst(e.target.value.toUpperCase())} placeholder="GSTIN"/>
+            <input className={inputClass} value={supplierPhone} onChange={e=>setSupplierPhone(e.target.value)} placeholder="Primary phone"/>
+            <input className={inputClass} value={supplierAltPhone} onChange={e=>setSupplierAltPhone(e.target.value)} placeholder="Alternate phone"/>
+            <input className={inputClass} type="email" value={supplierEmail} onChange={e=>setSupplierEmail(e.target.value)} placeholder="Email address"/>
+            <input className={inputClass} value={supplierCity} onChange={e=>setSupplierCity(e.target.value)} placeholder="City"/>
+            <input className={inputClass} value={supplierState} onChange={e=>setSupplierState(e.target.value)} placeholder="State"/>
+            <input className={inputClass} value={supplierPostal} onChange={e=>setSupplierPostal(e.target.value)} placeholder="PIN / Postal code"/>
+            <input className={inputClass} value={supplierCountry} onChange={e=>setSupplierCountry(e.target.value)} placeholder="Country"/>
+          </div>
+          <textarea className={inputClass} rows={2} value={supplierAddress} onChange={e=>setSupplierAddress(e.target.value)} placeholder="Full address"/>
+          <textarea className={inputClass} rows={2} value={supplierNotes} onChange={e=>setSupplierNotes(e.target.value)} placeholder="Notes / additional information"/>
+          <div className="flex gap-2"><button className={buttonClass} disabled={busy}>{editingSupplier ? "Save supplier changes" : "Save supplier"}</button>{editingSupplier && <button type="button" className="px-4 py-2.5 border-2 border-black bg-white text-xs font-black uppercase" onClick={resetSupplierForm}>Cancel</button>}</div>
         </form>
         <form onSubmit={paySupplier} className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
           <h2 className="font-black uppercase text-lg border-b-2 border-black pb-2">Pay supplier</h2>
@@ -169,6 +242,14 @@ export default function AccountsPage() {
           <button className={buttonClass} disabled={busy}>Record supplier payment</button>
         </form>
       </div>
+    </section>
+    <section className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
+      <h2 className="font-black uppercase text-lg">Supplier directory</h2>
+      {loading ? <p>Loading…</p> : suppliers.length===0 ? <p className="text-sm text-zinc-500">No suppliers added yet.</p> : suppliers.map(s=><div key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 py-3"><div><strong>{s.name}</strong><p className="text-xs text-zinc-500">{[s.owner_name,s.phone,s.email,s.gst_number,[s.city,s.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={()=>editSupplier(s)} className="px-3 py-1 border-2 border-black bg-white text-[10px] font-black uppercase">Edit details</button></div>)}
+    </section>
+    <section className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
+      <h2 className="font-black uppercase text-lg">Supplier directory</h2>
+      {loading ? <p>Loading…</p> : suppliers.length===0 ? <p className="text-sm text-zinc-500">No suppliers added yet.</p> : suppliers.map(s=><div key={s.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 py-3"><div><strong>{s.name}</strong><p className="text-xs text-zinc-500">{[s.owner_name,s.phone,s.email,s.gst_number,[s.city,s.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ")}</p></div><button type="button" onClick={()=>editSupplier(s)} className="px-3 py-1 border-2 border-black bg-white text-[10px] font-black uppercase">Edit details</button></div>)}
     </section>
     <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       <div className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
