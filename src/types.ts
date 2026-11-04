@@ -104,8 +104,17 @@ export interface StaffAccount {
   isActive: boolean;
 }
 
+export interface ShopCategory {
+  name: string;
+  subcategories: string[];
+}
+
 export interface StoreSettings {
   shopName: string;
+  shopCategory?: string;
+  shopSubcategory?: string;
+  productCategories?: ShopCategory[];
+  expenseCategories?: ShopCategory[];
   taxRate: number; // e.g., 5 for 5%
   currency: string; // e.g., "$" or "Rs"
   startingBalance: number; // Yesterday's closing balance
