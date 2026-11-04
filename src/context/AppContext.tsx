@@ -100,7 +100,7 @@ interface AppContextType {
   handleUpdateSale: (id: string, updates: Partial<Sale>) => Promise<void>;
   handleDeleteSale: (id: string) => Promise<void>;
 
-  handleAddExpense: (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName">) => Promise<void>;
+  handleAddExpense: (expense: Omit<Expense, "id" | "timestamp" | "loggedBy" | "loggedByName"> & { timestamp?: string }) => Promise<void>;
   handleUpdateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
   handleDeleteExpense: (id: string) => Promise<void>;
 
