@@ -1,13 +1,9 @@
 "use client";
 
 import React, { useState } from "react";
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseClient } from "../lib/supabase";
 import type { StoreSettings, Product, Staff, StaffLogin } from "../types";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
 
 interface SettingsPageProps {
   settings: StoreSettings;
@@ -44,7 +40,6 @@ export default function SettingsPage({
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [terminalRole, setTerminalRole] = useState<"cashier" | "inventory_manager">("cashier");
   const [terminalEmail, setTerminalEmail] = useState("");
-  const [terminalPassword, setTerminalPassword] = useState("");
   const [isOnboarding, setIsOnboarding] = useState(false);
 
   const activeLogins = staffLogins.filter((l) => l.isActive);
@@ -71,78 +66,58 @@ export default function SettingsPage({
   };
 
   const handleAssignTerminalAccess = async () => {
-    if (!selectedStaffId || !terminalEmail || !terminalPassword) {
-      setMessage("Please fill all fields");
+    if (!selectedStaffId || !terminalEmail.trim()) {
+      setMessage("Select a staff member and enter their real email address.");
       return;
     }
-    if (!currentUser) {
-      setMessage("Owner not logged in");
+    const client = getSupabaseClient();
+    if (!client || !currentUser) {
+      setMessage("Owner session is unavailable. Please sign in again.");
       return;
     }
-
     setIsOnboarding(true);
     setMessage("");
-
-    const selectedStaff = staff.find((s) => s.id === selectedStaffId);
-    if (!selectedStaff) {
-      setMessage("Staff not found");
-      setIsOnboarding(false);
-      return;
-    }
-
     try {
-      // Step 1: Terminate any existing active staff of the same role
-      const existing = staffLogins.find(
-        (l) => l.role === terminalRole && l.isActive && l.userId === currentUser.id
-      );
-      if (existing) {
-        await supabase
-          .from("staff_logins")
-          .update({ is_active: false, terminated_at: new Date().toISOString() })
-          .eq("id", existing.id);
-      }
-
-      // Step 2: Create new staff_login row
-      const { error } = await supabase.from("staff_logins").insert([
-        {
-          user_id: currentUser.id,
-          staff_id: selectedStaffId,
-          name: selectedStaff.name,
-          role: terminalRole,
-          email: terminalEmail,
-          password: terminalPassword,
-          is_active: true,
-          created_at: new Date().toISOString(),
-        },
-      ]);
-
-      if (error) throw error;
-
-      setMessage(`Terminal access assigned to ${selectedStaff.name} as ${terminalRole}`);
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !sessionData.session?.access_token) throw new Error("Your owner session has expired. Please sign in again.");
+      const response = await fetch("/api/staff/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: JSON.stringify({ staffId: selectedStaffId, email: terminalEmail.trim(), role: terminalRole }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to send staff invitation.");
+      setMessage(result.message || `Invitation sent to ${terminalEmail.trim()}.`);
       setSelectedStaffId("");
       setTerminalEmail("");
-      setTerminalPassword("");
       onRefresh();
     } catch (err: any) {
-      setMessage("Error: " + err.message);
+      setMessage("Error: " + (err?.message || "Unable to invite staff."));
+    } finally {
+      setIsOnboarding(false);
     }
-    setIsOnboarding(false);
   };
 
   const handleTerminate = async (loginId: string) => {
-    if (!confirm("Terminate this staff's terminal access? They can no longer log in.")) return;
+    if (!confirm("Terminate this staff's terminal access? They will lose access to this shop.")) return;
+    const client = getSupabaseClient();
+    if (!client) { setMessage("Supabase connection is unavailable."); return; }
     try {
-      await supabase
-        .from("staff_logins")
-        .update({ is_active: false, terminated_at: new Date().toISOString() })
-        .eq("id", loginId);
-      setMessage("Staff terminated successfully");
+      const { data: sessionData, error: sessionError } = await client.auth.getSession();
+      if (sessionError || !sessionData.session?.access_token) throw new Error("Your owner session has expired. Please sign in again.");
+      const response = await fetch("/api/staff/terminate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: JSON.stringify({ loginId }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Unable to terminate staff access.");
+      setMessage(result.message || "Staff access deactivated.");
       onRefresh();
     } catch (err: any) {
-      setMessage("Error: " + err.message);
+      setMessage("Error: " + (err?.message || "Unable to terminate staff access."));
     }
   };
-
   const handleReset = async () => {
     if (!confirm("WARNING: This will delete ALL data. Are you sure?")) return;
     if (!confirm("Really sure? This cannot be undone.")) return;
@@ -155,7 +130,7 @@ export default function SettingsPage({
   };
 
   const availableStaff = staff.filter(
-    (s) => !activeLogins.some((l) => l.staffId === s.id)
+    (s) => !s.archived_at && !activeLogins.some((l) => l.staffId === s.id)
   );
 
   return (
@@ -275,7 +250,7 @@ export default function SettingsPage({
           <p className="text-gray-500">No staff onboarded yet. Add staff in the Staff Management section.</p>
         ) : (
           <div className="space-y-2">
-            {staff.map((s) => {
+            {staff.filter((s) => !s.archived_at).map((s) => {
               const login = activeLogins.find((l) => l.staffId === s.id);
               return (
                 <div key={s.id} className="flex items-center justify-between border rounded p-3">
@@ -315,8 +290,7 @@ export default function SettingsPage({
       <section className="border rounded-lg p-4 space-y-4">
         <h2 className="text-lg font-semibold">Assign Terminal Access</h2>
         <p className="text-sm text-gray-500">
-          Select an onboarded staff member and give them login credentials for the POS terminal.
-          Only one active cashier and one active inventory manager allowed at a time.
+          Send an invitation to the staff member’s individual email address. They will set their own password through Supabase Auth. Multiple cashiers and inventory managers can be active at the same time.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -326,8 +300,7 @@ export default function SettingsPage({
               value={selectedStaffId}
               onChange={(e) => {
                 setSelectedStaffId(e.target.value);
-                const s = staff.find((st) => st.id === e.target.value);
-                if (s) setTerminalEmail(`${s.name.toLowerCase().replace(/\s+/g, ".")}@shop.local`);
+
               }}
               className="w-full border rounded px-3 py-2"
             >
@@ -356,17 +329,7 @@ export default function SettingsPage({
               type="email"
               value={terminalEmail}
               onChange={(e) => setTerminalEmail(e.target.value)}
-              placeholder="staff@shop.local"
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Login Password</label>
-            <input
-              type="text"
-              value={terminalPassword}
-              onChange={(e) => setTerminalPassword(e.target.value)}
-              placeholder="Set a password"
+              placeholder="staff@example.com"
               className="w-full border rounded px-3 py-2"
             />
           </div>
@@ -377,7 +340,7 @@ export default function SettingsPage({
           disabled={isOnboarding || !selectedStaffId}
           className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 disabled:opacity-50"
         >
-          {isOnboarding ? "Assigning..." : "Assign Terminal Access"}
+          {isOnboarding ? "Sending invitation..." : "Send Staff Invitation"}
         </button>
       </section>
 
