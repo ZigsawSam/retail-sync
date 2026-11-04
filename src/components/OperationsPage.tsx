@@ -107,18 +107,7 @@ export default function OperationsPage({
 
     onAddProduct(newProd);
 
-    // Record an automated Purchase Expense to reduce cash
-    const totalCost = newProd.purchasePrice * newProd.quantity;
-    if (totalCost > 0) {
-      const newExp: Expense = {
-        id: "exp-" + Date.now(),
-        category: "Inventory Purchase",
-        amount: totalCost,
-        description: `Purchased initial stock of ${newProd.quantity}x ${newProd.name}`,
-        timestamp: getShopLocalISOString()
-      };
-      onAddExpense(newExp);
-    }
+    // Opening stock only; record supplier invoices in Purchases & Accounts.
 
     // Reset Form
     setQuickName("");
@@ -126,7 +115,7 @@ export default function OperationsPage({
     setQuickSellingPrice("");
     setQuickQuantity("");
     setQuickBarcode("");
-    alert("Product added successfully, and purchase cost registered under store expenses!");
+    alert("Product and opening stock added. Record actual supplier invoices in Purchases & Accounts.");
   };
 
   // --- Handlers: Bulk Row Add ---
@@ -152,7 +141,7 @@ export default function OperationsPage({
     const validRows = bulkRows.filter(row => row.name && row.sellingPrice && row.quantity);
     if (validRows.length === 0) return;
 
-    let totalBulkCost = 0;
+
     
     validRows.forEach((row, idx) => {
       const newProd: Product = {
@@ -168,26 +157,17 @@ export default function OperationsPage({
       };
 
       onAddProduct(newProd);
-      totalBulkCost += (newProd.purchasePrice * newProd.quantity);
+
     });
 
-    if (totalBulkCost > 0) {
-      const newExp: Expense = {
-        id: "exp-" + Date.now(),
-        category: "Inventory Purchase",
-        amount: totalBulkCost,
-        description: `Bulk restock of ${validRows.length} distinct item lines`,
-        timestamp: getShopLocalISOString()
-      };
-      onAddExpense(newExp);
-    }
+    // Opening stock only; record supplier invoices in Purchases & Accounts.
 
     // Reset table
     setBulkRows([
       { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
       { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }
     ]);
-    alert(`Bulk registered ${validRows.length} items successfully! Recorded total purchase cost of ${currency}${totalBulkCost.toFixed(2)} to expenses.`);
+    alert(`Bulk registered ${validRows.length} products/opening stock rows. Record actual supplier invoices in Purchases & Accounts.`);
   };
 
   // --- Handlers: CSV Export Template & Import ---
@@ -218,7 +198,7 @@ export default function OperationsPage({
       try {
         const lines = text.split("\n");
         let successCount = 0;
-        let totalImportCost = 0;
+
 
         for (let i = 1; i < lines.length; i++) {
           const line = lines[i].trim();
@@ -249,23 +229,14 @@ export default function OperationsPage({
           };
 
           onAddProduct(newProd);
-          totalImportCost += (newProd.purchasePrice * newProd.quantity);
+
           successCount++;
         }
 
-        if (totalImportCost > 0) {
-          const newExp: Expense = {
-            id: "exp-" + Date.now(),
-            category: "Inventory Purchase",
-            amount: totalImportCost,
-            description: `Imported ${successCount} items from CSV spreadsheet`,
-            timestamp: getShopLocalISOString()
-          };
-          onAddExpense(newExp);
-        }
+        // Imported rows are opening stock only; record supplier invoices in Purchases & Accounts.
 
         setCsvUploadStatus("success");
-        setCsvLogMessage(`Successfully imported ${successCount} product lines! Total purchase cost of ${currency}${totalImportCost.toFixed(2)} credited to expenses ledger.`);
+        setCsvLogMessage(`Successfully imported ${successCount} product lines as opening stock. Record actual supplier invoices in Purchases & Accounts.`);
       } catch (err) {
         setCsvUploadStatus("error");
         setCsvLogMessage("Parsing error. Please make sure the columns match our template exact format.");

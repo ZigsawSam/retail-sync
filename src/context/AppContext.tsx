@@ -147,6 +147,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [staffLogins, setStaffLogins] = useState<StaffLogin[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [accountPayments, setAccountPayments] = useState<any[]>([]);
   const [staffExpensesTotal, setStaffExpensesTotal] = useState(0);
   const [settings, setSettings] = useState<StoreSettings>({
     shopName: "My Shop",
@@ -243,6 +244,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setStaffLogins([]);
       setSales([]);
       setExpenses([]);
+      setAccountPayments([]);
       setCheques([]);
       setElectronicTxs([]);
       setActualDrawerCash(null);
@@ -411,8 +413,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Financial data rows remain owner-only.
     if (!staffSession) {
-      const { data: expensesData } = await supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false });
+      const [{ data: expensesData }, { data: accountPaymentData, error: accountPaymentError }] = await Promise.all([
+        supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false }),
+        supabase.from("account_payments").select("*").eq("userId", userId).order("timestamp", { ascending: false }),
+      ]);
       setExpenses(expensesData || []);
+      if (accountPaymentError && accountPaymentError.code !== "42P01") setSupabaseError(accountPaymentError);
+      setAccountPayments(accountPaymentData || []);
 
       const { data: settingsData } = await supabase.from("settings").select("*").eq("id", userId).maybeSingle();
       if (settingsData) {
@@ -439,6 +446,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setElectronicTxs(electronicData || []);
     } else {
       setExpenses([]);
+      setAccountPayments([]);
       setCheques([]);
       setElectronicTxs([]);
     }
@@ -824,7 +832,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleRoleChange = (role: ERPRole) => {
     if (!staffSession) setSelectedRole(role);
   };
-  const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - (staffSession ? staffExpensesTotal : expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0));
+  const cashInHand = staffSession
+    ? Number(settings.startingBalance || 0) + sales.filter((sale) => sale.paymentMethod === "Cash").reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0) - staffExpensesTotal
+    : Number(settings.startingBalance || 0)
+      + sales.filter((sale) => sale.paymentMethod === "Cash").reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0)
+      + accountPayments.filter((payment) => payment.party_type === "customer" && payment.direction === "received" && payment.payment_method === "Cash").reduce((total, payment) => total + Number(payment.amount || 0), 0)
+      - expenses.filter((expense) => !expense.paymentMethod || expense.paymentMethod === "Cash").reduce((total, expense) => total + Number(expense.amount || 0), 0)
+      - accountPayments.filter((payment) => payment.party_type === "supplier" && payment.direction === "paid" && payment.payment_method === "Cash").reduce((total, payment) => total + Number(payment.amount || 0), 0);
   const currencyCode = currencyOverride || (settings.currency && /^[A-Z]{3}$/.test(settings.currency) ? settings.currency : "INR");
   const currency = (() => {
     try { return new Intl.NumberFormat("en", { style: "currency", currency: currencyCode }).formatToParts(0).find((part) => part.type === "currency")?.value || currencyCode; }

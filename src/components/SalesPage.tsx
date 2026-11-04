@@ -35,7 +35,7 @@ interface SalesPageProps {
   shopName: string;
   taxRate: number;
   currency: string;
-  onAddSale: (sale: Sale) => void;
+  onAddSale: (sale: Sale) => Promise<void>;
   onAddProduct: (product: Product) => void;
   onAddCustomer: (customer: Customer) => void;
   showInvoiceForm?: boolean;
@@ -89,6 +89,7 @@ export default function SalesPage({
   // Settings/Controls
   const [isTaxEnabled, setIsTaxEnabled] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState("Cash");
+  const [initialPaymentReceived, setInitialPaymentReceived] = useState("");
   const [redeemPoints, setRedeemPoints] = useState(false);
   const [pointsToRedeem, setPointsToRedeem] = useState(0);
   const [customDiscount, setCustomDiscount] = useState<number>(0);
@@ -347,8 +348,9 @@ export default function SalesPage({
   };
 
   // Finalize Sale process
-  const handleFinalize = () => {
+  const handleFinalize = async () => {
     if (cart.length === 0) return;
+    if (paymentMethod === "Store Credit" && !matchedCustomer) { alert("Select an existing saved customer before recording a credit sale."); return; }
 
     // Check if new customer and we should onboard them to loyalty points
     let finalCustName = customerName || "General Customer";
@@ -388,6 +390,9 @@ export default function SalesPage({
       id: "TX-" + (1000 + sales.length + 1),
       customerName: finalCustName,
       customerPhone: finalCustPhone,
+      customerId: matchedCustomer?.id || null,
+      paidAmount: paymentMethod === "Store Credit" ? Math.min(totalAmount, Math.max(0, Number(initialPaymentReceived || 0))) : totalAmount,
+      dueAmount: paymentMethod === "Store Credit" ? Math.max(0, totalAmount - Math.min(totalAmount, Math.max(0, Number(initialPaymentReceived || 0)))) : 0,
       items: saleItems,
       subtotal,
       taxRate: isTaxEnabled ? defaultTaxRate : 0,
@@ -412,8 +417,7 @@ export default function SalesPage({
       setShowCommissionPrompt(true);
     } else {
       // Direct to receipt options
-      onAddSale(saleRecord);
-      setShowInvoiceDownloadOptions(true);
+      try { await onAddSale(saleRecord); setShowInvoiceDownloadOptions(true); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); }
     }
   };
 
@@ -451,15 +455,14 @@ export default function SalesPage({
       }
     } else {
       // Add to logs and open download options
-      onAddSale(finalizedSale);
-      setShowInvoiceDownloadOptions(true);
+      try { await onAddSale(finalizedSale); setShowInvoiceDownloadOptions(true); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); }
     }
   };
 
   const closeSmsSimulator = () => {
     setShowSmsSimulator(false);
     if (finalizedSale) {
-      onAddSale(finalizedSale);
+      try { await onAddSale(finalizedSale); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); return; }
     }
     setShowInvoiceDownloadOptions(true);
   };
@@ -1599,6 +1602,7 @@ export default function SalesPage({
                 <option value="Store Credit">Store Credit / Unpaid</option>
               </select>
             </div>
+            {paymentMethod === "Store Credit" && <div className="mb-4"><label className="block text-[10px] font-black uppercase mb-1.5">Amount received now ({currency})</label><input type="number" min="0" max={totalAmount} step="0.01" value={initialPaymentReceived} onChange={e=>setInitialPaymentReceived(e.target.value)} className="w-full px-3 py-2 border-2 border-black" placeholder="0.00"/><p className="text-[10px] font-bold mt-1">Customer due: {currency}{Math.max(0,totalAmount-Math.min(totalAmount,Number(initialPaymentReceived||0))).toFixed(2)}</p></div>}
 
             {/* Manual Discount Input */}
             <div className="mb-4">

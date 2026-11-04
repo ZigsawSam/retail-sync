@@ -66,6 +66,9 @@ export interface Sale {
   id: string;
   customerName: string;
   customerPhone: string;
+  customerId?: string | null;
+  paidAmount?: number;
+  dueAmount?: number;
   items: SaleItem[];
   subtotal: number;
   taxRate: number;

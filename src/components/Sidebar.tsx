@@ -74,7 +74,7 @@ export default function Sidebar({
     { id: "dashboard", label: "DASHBOARD", icon: LayoutDashboard, roles: ROUTE_ROLES.dashboard },
     { id: "sales", label: "SALES COUNTER", icon: ShoppingCart, roles: ROUTE_ROLES.sales },
     { id: "people", label: "STAFF & PEOPLE", icon: Users, roles: ROUTE_ROLES.people },
-    { id: "operations", label: "OPERATIONS", icon: Package, roles: ROUTE_ROLES.operations },
+    { id: "operations", label: "OPERATIONS", icon: Package, roles: ROUTE_ROLES.operations },\n    { id: "accounts", label: "PURCHASES & ACCOUNTS", icon: Wallet, roles: ROUTE_ROLES.accounts },
     { id: "insights", label: "LOYALTY INDEX", icon: TrendingUp, roles: ROUTE_ROLES.insights },
     { id: "ai", label: "AI RETAILER", icon: Sparkles, badge: "GEMINI", roles: ROUTE_ROLES.ai },
     { id: "settings", label: "SETTINGS", icon: SettingsIcon, roles: ROUTE_ROLES.settings },
