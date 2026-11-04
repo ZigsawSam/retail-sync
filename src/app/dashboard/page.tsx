@@ -38,7 +38,6 @@ export default function DashboardPageRoute() {
       showInvoiceForm={context.showInvoiceForm}
       setShowInvoiceForm={context.setShowInvoiceForm}
       onAddExpense={context.handleAddExpense}
-      onDeleteExpense={context.handleDeleteExpense}
       currentRole={context.currentRole}
       onAddProduct={context.handleAddProduct}
       onUpdateProductStock={context.handleUpdateProductStock}
