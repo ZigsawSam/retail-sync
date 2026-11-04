@@ -18,10 +18,7 @@ export default function SettingsPageRoute() {
       staff={context.staff}
       staffLogins={context.staffLogins}
       currentUser={context.currentUser}
-      onRefresh={() => {
-        // Force re-fetch by reloading or you can expose a fetchAllData function
-        window.location.reload();
-      }}
+      onRefresh={() => { void context.refreshData(); }}
     />
   );
 }
