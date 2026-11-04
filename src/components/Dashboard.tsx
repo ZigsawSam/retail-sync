@@ -147,7 +147,7 @@ export default function Dashboard({
   const [discloseExpenses, setDiscloseExpenses] = useState(false);
 
   // Quick Expense Form States
-  const [expCategory, setExpCategory] = useState<"Staff Salary" | "Agent Commission" | "Inventory Purchase" | "Rent" | "Utilities" | "Other">("Other");
+  const [expCategory, setExpCategory] = useState<string>("Other");
   const [expAmount, setExpAmount] = useState("");
   const [expDesc, setExpDesc] = useState("");
   const [expPaymentMethod, setExpPaymentMethod] = useState("Cash");
@@ -1217,12 +1217,8 @@ export default function Dashboard({
                     onChange={(e) => setExpCategory(e.target.value as any)}
                     className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-bold font-mono focus:outline-none"
                   >
-                    <option value="Staff Salary">Staff Salary</option>
-                    <option value="Agent Commission">Agent Commission</option>
-                    <option value="Inventory Purchase">Inventory Purchase</option>
-                    <option value="Rent">Rent</option>
-                    <option value="Utilities">Utilities</option>
-                    <option value="Other">Other Overhead / Expenses</option>
+                    {(settings.expenseCategories?.length ? settings.expenseCategories.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => ({ value: `${item.name} / ${sub}`, label: `${item.name} / ${sub}` })) : [{ value: item.name, label: item.name }]) : ["Inventory & Procurement","Employee Expenses","Premises","Utilities","Marketing","Administration","Logistics","Financial Charges","Taxes & Compliance","Other"].map(value => ({value,label:value}))).map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    {["Staff Salary","Agent Commission","Inventory Purchase","Rent","Utilities","Other"].filter(value => !settings.expenseCategories?.some(item => item.name === value)).map(value => <option key={value} value={value}>{value}</option>)}
                   </select>
                 </div>
 
