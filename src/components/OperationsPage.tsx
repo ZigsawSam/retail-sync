@@ -1,5 +1,4 @@
 import React, { useState, useMemo } from "react";
-import { getShopLocalISOString } from "../lib/dateUtils";
 import { 
   Package, 
   Plus, 
@@ -252,30 +251,10 @@ export default function OperationsPage({
   };
 
   const handleInlineRestockSave = () => {
-    const p = products.find(prod => prod.id === selectedRestockProdId);
-    if (!p) return;
-
-    const addQty = parseInt(inlineRestockQty);
-    if (!addQty || addQty <= 0) return;
-
-    const newStock = p.quantity + addQty;
-    onUpdateProductStock(p.id, newStock);
-
-    // Record Expense of purchase
-    const cost = p.purchasePrice * addQty;
-    if (cost > 0) {
-      const newExp: Expense = {
-        id: "exp-" + Date.now(),
-        category: "Inventory Purchase",
-        amount: cost,
-        description: `Restocked ${addQty}x of ${p.name}`,
-        timestamp: getShopLocalISOString()
-      };
-      onAddExpense(newExp);
-    }
-
+    const product = products.find(item => item.id === selectedRestockProdId);
+    if (!product) return;
+    alert("To keep inventory, supplier balances and cash records accurate, record this restock through Operations → Purchases & Balances.");
     setSelectedRestockProdId("");
-    alert(`Successfully restocked ${p.name} with +${addQty} units. Registered procurement expense of ${currency}${cost.toFixed(2)}.`);
   };
 
   return (
