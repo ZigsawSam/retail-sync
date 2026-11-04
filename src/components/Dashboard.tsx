@@ -63,7 +63,7 @@ interface DashboardProps {
   onDeleteCheque: (id: string) => void;
   actualDrawerCash: number | null;
   onUpdateActualDrawerCash: (amount: number | null) => void;
-  onAddSale: (sale: Sale) => void;
+  onAddSale: (sale: Sale) => Promise<void>;
   onUpdateSale: (sale: Sale) => void;
   customers: Customer[];
   onAddCustomer: (customer: Customer) => void;
@@ -609,7 +609,7 @@ export default function Dashboard({
     }
   };
 
-  const handleFinalizeSale = (e: React.FormEvent) => {
+  const handleFinalizeSale = async (e: React.FormEvent) => {
     e.preventDefault();
     if (salesCart.length === 0) {
       triggerToast("Your cart is empty!");
@@ -640,7 +640,13 @@ export default function Dashboard({
       timestamp: getShopLocalISOString()
     };
 
-    onAddSale(newSale);
+    try {
+      await onAddSale(newSale);
+    } catch (error) {
+      console.error("Unable to complete sale:", error);
+      triggerToast(error instanceof Error ? error.message : "Sale failed. Please try again.");
+      return;
+    }
 
     // Auto onboard customer if phone number is provided
     if (resolvedCustPhone !== "N/A") {
