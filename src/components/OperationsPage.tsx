@@ -66,7 +66,7 @@ export default function OperationsPage({
   const [bulkRows, setBulkRows] = useState<Partial<Product>[]>([
     { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
     { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
-    { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }
+    { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }
   ]);
 
   // --- Form States: CSV Import ---
