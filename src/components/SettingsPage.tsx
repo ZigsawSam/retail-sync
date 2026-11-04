@@ -347,8 +347,9 @@ export default function SettingsPage({
         </div>
 
         <button
+          type="button"
           onClick={handleAssignTerminalAccess}
-          disabled={isOnboarding || !selectedStaffId}
+          disabled={isOnboarding || !selectedStaffId || !terminalEmail.trim()}
           className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
         >
           {isOnboarding ? "Sending invitation..." : "Send Staff Invitation"}
