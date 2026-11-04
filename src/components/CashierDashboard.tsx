@@ -20,6 +20,10 @@ import {
 import { Product, Sale, Customer, StoreSettings, Expense } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { SHOP_TODAY_STR, getShopLocalISOString, isToday } from "../lib/dateUtils";
+const getDateInputToday = () => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
+const timestampForSelectedDate = (date: string) => date+"T12:00:00-07:00";
+
+
 
 interface CashierDashboardProps {
   sales: Sale[];
@@ -58,6 +62,7 @@ export default function CashierDashboard({
   // Expense & Drawer Cash States
   const [consoleTab, setConsoleTab] = useState<"expense" | "drawer">("expense");
   const [expAmount, setExpAmount] = useState("");
+  const [expenseDate, setExpenseDate] = useState(getDateInputToday);
   const [expCategory, setExpCategory] = useState("Other");
   const [expDesc, setExpDesc] = useState("");
   const [expPaymentMethod, setExpPaymentMethod] = useState("Cash");
@@ -182,7 +187,7 @@ export default function CashierDashboard({
       category: expCategory as any,
       amount: amt,
       description: expDesc || `${expCategory} logged by cashier`,
-      timestamp: getShopLocalISOString(),
+      timestamp: timestampForSelectedDate(expenseDate),
       paymentMethod: expPaymentMethod
     };
 
@@ -659,6 +664,10 @@ export default function CashierDashboard({
 
               {consoleTab === "expense" ? (
                 <form onSubmit={handleCashierExpenseSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Transaction Date</label>
+                  <input type="date" required value={expenseDate} onChange={(e) => setExpenseDate(e.target.value)} className="w-full text-xs p-2 bg-white border-2 border-black text-black rounded-none font-bold font-mono focus:outline-none" />
+                </div>
                   <div>
                     <label className="block text-[9px] text-black font-black uppercase tracking-wider mb-1 font-mono">Category</label>
                     <select
