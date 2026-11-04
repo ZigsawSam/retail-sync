@@ -1,3 +1,5 @@
+BEGIN;
+
 -- Expose only the shop's category configuration to authenticated staff.
 -- Staff cannot write settings; the owner-only settings policies remain unchanged.
 CREATE OR REPLACE FUNCTION public.staff_get_shop_categories()
@@ -36,3 +38,5 @@ REVOKE ALL ON FUNCTION public.staff_get_shop_categories() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.staff_get_shop_categories() TO authenticated;
 
 NOTIFY pgrst, 'reload schema';
+
+COMMIT;
