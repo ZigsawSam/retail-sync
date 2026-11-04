@@ -164,13 +164,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // in the loading state until the tenant/role resolution effect completes.
   useEffect(() => {
     let active = true;
-    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return;
+
+      // Token refreshes happen when a background tab becomes active. They do
+      // not represent a new login and must not reset the entire app to loading.
+      if (event === "TOKEN_REFRESHED" || event === "USER_UPDATED") return;
+
       const user = session?.user ?? null;
-      setCurrentUser(user);
-      if (user) {
+      setCurrentUser((previous: any) => {
+        if (previous?.id === user?.id) return previous;
+        return user;
+      });
+      if (event === "SIGNED_IN" && user) {
         setIsLoading(true);
-      } else {
+      } else if (event === "SIGNED_OUT" || !user) {
         setStaffSession(null);
         setTenantOwnerId(null);
         setIsLoading(false);
