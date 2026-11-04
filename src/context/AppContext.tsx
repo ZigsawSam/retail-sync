@@ -360,8 +360,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Staff receive a narrowly scoped shop summary, never direct settings or expense rows.
     if (staffSession) {
-      const { data: shopContext, error: shopContextError } = await supabase.rpc("staff_get_shop_context");
+      const [{ data: shopContext, error: shopContextError }, { data: categoryContext, error: categoryContextError }] = await Promise.all([
+        supabase.rpc("staff_get_shop_context"),
+        supabase.rpc("staff_get_shop_categories"),
+      ]);
       if (shopContextError) setSupabaseError(shopContextError);
+      if (categoryContextError) setSupabaseError(categoryContextError);
+      if (categoryContext) {
+        setSettings((prev) => ({
+          ...prev,
+          shopCategory: categoryContext.shopCategory || "",
+          shopSubcategory: categoryContext.shopSubcategory || "",
+          productCategories: categoryContext.productCategories || [],
+          expenseCategories: categoryContext.expenseCategories || [],
+        }));
+      }
       if (shopContext) {
         setSettings((prev) => ({
           ...prev,
