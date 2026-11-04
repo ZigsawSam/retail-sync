@@ -278,7 +278,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           const { data: ownerSettings, error: settingsError } = await supabase
             .from("settings").select("id").eq("id", currentUser.id).maybeSingle();
           if (settingsError) throw settingsError;
-          if (!ownerSettings) throw new Error("This account is not an active shop owner or staff member.");
+          if (!ownerSettings) {
+            // Email-confirmed registrations have no active session during signup,
+            // so initialize their shop profile on their first authenticated login.
+            const metadata = currentUser.user_metadata || {};
+            if (!metadata.shop_name || !metadata.shop_category || !metadata.shop_subcategory) {
+              throw new Error("This account is not an active shop owner or staff member.");
+            }
+            const { error: initializeError } = await supabase.from("settings").upsert({
+              id: currentUser.id,
+              userId: currentUser.id,
+              shopName: metadata.shop_name,
+              shop_category: metadata.shop_category,
+              shop_subcategory: metadata.shop_subcategory,
+              product_categories: [],
+              expense_categories: [],
+              taxRate: 5,
+              startingBalance: 0,
+              currency: "Rs.",
+              quickAddProductIds: [],
+            });
+            if (initializeError) throw initializeError;
+          }
           if (!cancelled) {
             setTenantOwnerId(currentUser.id);
             setStaffSession(null);
