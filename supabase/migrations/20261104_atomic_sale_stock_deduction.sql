@@ -42,10 +42,11 @@ BEGIN
 
   -- Group duplicate cart lines for the same product before checking/decrementing.
   FOR v_item IN
-    SELECT product_id, SUM(quantity)::integer AS quantity
-    FROM jsonb_to_recordset(p_sale->'items')
-      AS item(product_id text, quantity integer)
-    GROUP BY product_id
+    SELECT item->>'productId' AS product_id,
+           SUM((item->>'quantity')::integer)::integer AS quantity
+    FROM jsonb_array_elements(p_sale->'items') AS item
+    GROUP BY item->>'productId'
+    ORDER BY item->>'productId'
   LOOP
     IF v_item.product_id IS NULL OR v_item.quantity IS NULL OR v_item.quantity <= 0 THEN
       RAISE EXCEPTION 'Invalid product or sale quantity';
