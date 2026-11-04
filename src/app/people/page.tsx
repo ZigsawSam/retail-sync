@@ -13,8 +13,8 @@ export default function PeoplePageRoute() {
       staff={context.staff}
       expenses={context.expenses}
       currency={context.currency}
-      onOnboardStaff={context.handleOnboardStaff}
-      onLogAttendance={context.handleLogAttendance}
+      onOnboardStaff={(newStaff) => context.handleAddStaff(newStaff)}
+      onLogAttendance={(staffId, date, present, hoursWorked) => context.handleMarkAttendance(staffId, date, present, hoursWorked)}
       onAddExpense={context.handleAddExpense}
       settings={context.settings}
       onUpdateSettings={context.handleUpdateSettings}
