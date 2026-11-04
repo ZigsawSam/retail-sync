@@ -432,7 +432,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (paymentContextError) setSupabaseError(paymentContextError);
       setExpenses((staffExpenseRows || []) as Expense[]);
       setAccountPayments(paymentContext?.payments || []);
-      setStaffExpensesTotal((staffExpenseRows || []).reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0));
+      setStaffExpensesTotal((staffExpenseRows || []).filter((row: any) => !row.paymentMethod || row.paymentMethod === "Cash").reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0));
     } else if (!staffSession) {
       const [{ data: expensesData }, { data: accountPaymentData, error: accountPaymentError }] = await Promise.all([
         supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false }),
