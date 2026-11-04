@@ -5,6 +5,7 @@ import {
   Users, 
   Package, 
   Wallet,
+  Coins,
   ReceiptText,
   History,
   ContactRound,
