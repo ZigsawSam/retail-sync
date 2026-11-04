@@ -1,9 +1,9 @@
--- Restore the Quick Add Products preference used by Settings.
--- Existing shop settings are preserved; current rows default to no quick-add products.
+-- Add the Quick Add Products preference used by the current camelCase settings schema.
+-- Safe for existing shops: existing rows receive an empty JSON array.
 BEGIN;
 
 ALTER TABLE public.settings
-  ADD COLUMN IF NOT EXISTS quick_add_product_ids jsonb NOT NULL DEFAULT '[]'::jsonb;
+  ADD COLUMN IF NOT EXISTS "quickAddProductIds" jsonb NOT NULL DEFAULT '[]'::jsonb;
 
 NOTIFY pgrst, 'reload schema';
 
