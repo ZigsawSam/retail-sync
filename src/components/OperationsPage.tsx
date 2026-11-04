@@ -184,7 +184,7 @@ export default function OperationsPage({
 
     // Reset table
     setBulkRows([
-      { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
+      { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
       { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }
     ]);
     alert(`Bulk registered ${validRows.length} items successfully! Recorded total purchase cost of ${currency}${totalBulkCost.toFixed(2)} to expenses.`);
@@ -228,7 +228,7 @@ export default function OperationsPage({
           if (values.length < 4) continue; // must have basic parameters
 
           const pName = values[0];
-          const pCategory = values[1] || "Apparel";
+          const pCategory = configuredCategories.includes(values[1]) ? values[1] : (configuredCategories[0] || "Other");
           const pCost = parseFloat(values[2]) || 0;
           const pMrp = parseFloat(values[3]) || 0;
           const pQty = parseInt(values[4]) || 0;
