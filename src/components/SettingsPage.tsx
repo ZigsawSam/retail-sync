@@ -145,8 +145,8 @@ export default function SettingsPage({
   );
 
   return (
-    <div className="w-full max-w-5xl mx-auto px-4 py-6 md:px-8 md:py-8 space-y-6 text-slate-900">
-      <div className="flex flex-col gap-1"><p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Workspace configuration</p><h1 className="text-3xl font-semibold tracking-tight text-slate-900">Settings</h1><p className="text-sm text-slate-600">Manage your store profile, preferences and staff access.</p></div>
+    <div className="w-full max-w-6xl mx-auto px-4 py-6 md:px-8 md:py-8 space-y-6 text-black">
+      <div className="flex flex-col gap-1 border-b-2 border-black pb-4"><p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 font-mono">Retail Sync / Workspace configuration</p><h1 className="text-3xl font-black uppercase tracking-tight text-black">Settings</h1><p className="text-sm text-zinc-600">Manage your store profile, application appearance and staff access.</p></div>
 
       {message && (
         <div className={`p-3 rounded ${message.includes("Error") ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}`}>
@@ -154,52 +154,20 @@ export default function SettingsPage({
         </div>
       )}
 
-      {/* Store Settings */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
-        <h2 className="text-base font-semibold text-slate-900">Store Settings</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      {/* Global Appearance */}
+      <section className="rounded-none border-2 border-black bg-white p-5 md:p-6 space-y-4 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <div className="flex flex-col gap-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-500 font-mono">Application-wide preference</p>
+          <h2 className="text-lg font-black uppercase tracking-tight text-black">Appearance & Theme</h2>
+          <p className="text-sm text-zinc-600">Choose the visual theme for the entire Retail Sync workspace, including Dashboard, Sales, Operations, Insights, Staff and Settings.</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4 items-end">
           <div>
-            <label className="mb-1.5 block text-sm font-medium text-slate-700">Shop Name</label>
-            <input
-              type="text"
-              value={shopName}
-              onChange={(e) => setShopName(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Tax Rate (%)</label>
-            <input
-              type="number"
-              value={taxRate}
-              onChange={(e) => setTaxRate(Number(e.target.value))}
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Currency Symbol</label>
-            <input
-              type="text"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Starting Balance</label>
-            <input
-              type="number"
-              value={startingBalance}
-              onChange={(e) => setStartingBalance(Number(e.target.value))}
-              className="w-full border rounded px-3 py-2"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Theme</label>
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-wider text-black font-mono">Workspace theme</label>
             <select
               value={theme}
               onChange={(e) => setTheme(e.target.value as any)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-3 text-sm font-bold text-black outline-none focus:ring-2 focus:ring-yellow-400"
             >
               <option value="enterprise">Enterprise</option>
               <option value="bauhaus">Bauhaus</option>
@@ -211,14 +179,58 @@ export default function SettingsPage({
               <option value="material">Material</option>
             </select>
           </div>
+          <p className="text-xs leading-relaxed text-zinc-600">Your selection is applied across the whole app after you click <strong>Save Settings</strong> below. It is stored with your shop preferences.</p>
+        </div>
+      </section>
+
+      {/* Store Settings */}
+      <section className="rounded-none border-2 border-black bg-white p-5 md:p-6 space-y-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <h2 className="text-base font-black uppercase tracking-tight text-black">Store Settings</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Owner Password (optional)</label>
+            <label className="mb-2 block text-[10px] font-black uppercase tracking-wider text-black font-mono">Shop Name</label>
+            <input
+              type="text"
+              value={shopName}
+              onChange={(e) => setShopName(e.target.value)}
+              className="w-full rounded-none border-2 border-black bg-white px-3 py-2.5 text-sm text-black font-mono outline-none transition focus:ring-2 focus:ring-yellow-400"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider mb-2 text-black font-mono">Tax Rate (%)</label>
+            <input
+              type="number"
+              value={taxRate}
+              onChange={(e) => setTaxRate(Number(e.target.value))}
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-2 text-black font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider mb-2 text-black font-mono">Currency Symbol</label>
+            <input
+              type="text"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-2 text-black font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider mb-2 text-black font-mono">Starting Balance</label>
+            <input
+              type="number"
+              value={startingBalance}
+              onChange={(e) => setStartingBalance(Number(e.target.value))}
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-2 text-black font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-[10px] font-black uppercase tracking-wider mb-2 text-black font-mono">Owner Password (optional)</label>
             <input
               type="password"
               value={ownerPassword}
               onChange={(e) => setOwnerPassword(e.target.value)}
               placeholder="Leave blank to disable"
-              className="w-full border rounded px-3 py-2"
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-2 text-black font-mono"
             />
           </div>
         </div>
@@ -248,15 +260,15 @@ export default function SettingsPage({
         <button
           onClick={handleSave}
           disabled={isSaving}
-          className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+          className="rounded-none border-2 border-black bg-[#FFC300] px-5 py-3 text-xs font-black uppercase tracking-wider text-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-0.5 hover:shadow-none disabled:opacity-50"
         >
           {isSaving ? "Saving..." : "Save Settings"}
         </button>
       </section>
 
       {/* Your Onboarded Staff */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Your Onboarded Staff</h2>
+      <section className="rounded-none border-2 border-black bg-white p-5 md:p-6 space-y-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <h2 className="text-lg font-black uppercase tracking-tight text-black">Your Onboarded Staff</h2>
         {staff.length === 0 ? (
           <p className="text-gray-500">No staff onboarded yet. Add staff in the Staff Management section.</p>
         ) : (
@@ -298,22 +310,22 @@ export default function SettingsPage({
       </section>
 
       {/* Assign Terminal Access */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
-        <h2 className="text-lg font-semibold">Assign Terminal Access</h2>
+      <section className="rounded-none border-2 border-black bg-white p-5 md:p-6 space-y-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+        <h2 className="text-lg font-black uppercase tracking-tight text-black">Assign Terminal Access</h2>
         <p className="text-sm text-gray-500">
           Send an invitation to the staff member’s individual email address. They will set their own password through Supabase Auth. Multiple cashiers and inventory managers can be active at the same time.
         </p>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Select Staff</label>
+            <label className="block text-[10px] font-black uppercase tracking-wider mb-2 text-black font-mono">Select Staff</label>
             <select
               value={selectedStaffId}
               onChange={(e) => {
                 setSelectedStaffId(e.target.value);
 
               }}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-2 text-black font-mono"
             >
               <option value="">-- Select staff --</option>
               {availableStaff.map((s) => (
@@ -324,24 +336,24 @@ export default function SettingsPage({
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Terminal Role</label>
+            <label className="block text-[10px] font-black uppercase tracking-wider mb-2 text-black font-mono">Terminal Role</label>
             <select
               value={terminalRole}
               onChange={(e) => setTerminalRole(e.target.value as any)}
-              className="w-full border rounded px-3 py-2"
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-2 text-black font-mono"
             >
               <option value="cashier">Cashier</option>
               <option value="inventory_manager">Inventory Manager</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Login Email</label>
+            <label className="block text-[10px] font-black uppercase tracking-wider mb-2 text-black font-mono">Login Email</label>
             <input
               type="email"
               value={terminalEmail}
               onChange={(e) => setTerminalEmail(e.target.value)}
               placeholder="staff@example.com"
-              className="w-full border rounded px-3 py-2"
+              className="w-full border-2 border-black rounded-none bg-white px-3 py-2 text-black font-mono"
             />
           </div>
         </div>
@@ -350,7 +362,7 @@ export default function SettingsPage({
           type="button"
           onClick={handleAssignTerminalAccess}
           disabled={isOnboarding || !selectedStaffId || !terminalEmail.trim()}
-          className="rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
+          className="rounded-none border-2 border-black bg-[#0055A5] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-0.5 hover:shadow-none disabled:opacity-50"
         >
           {isOnboarding ? "Sending invitation..." : "Send Staff Invitation"}
         </button>
@@ -358,8 +370,8 @@ export default function SettingsPage({
 
       {/* Login History */}
       {terminatedLogins.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5 md:p-6 space-y-5 shadow-sm">
-          <h2 className="text-lg font-semibold">Terminal Access History</h2>
+        <section className="rounded-none border-2 border-black bg-white p-5 md:p-6 space-y-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <h2 className="text-lg font-black uppercase tracking-tight text-black">Terminal Access History</h2>
           <div className="space-y-2">
             {terminatedLogins.map((l) => (
               <div key={l.id} className="flex items-center justify-between border rounded p-3 bg-gray-50">
@@ -377,8 +389,8 @@ export default function SettingsPage({
       )}
 
       {/* Danger Zone */}
-      <section className="rounded-xl border border-red-200 bg-white p-5 md:p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-red-600">Danger Zone</h2>
+      <section className="rounded-none border-2 border-red-600 bg-white p-5 md:p-6 space-y-4">
+        <h2 className="text-lg font-black uppercase tracking-tight text-black text-red-600">Danger Zone</h2>
         <button
           onClick={handleReset}
           className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
