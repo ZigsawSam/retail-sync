@@ -18,6 +18,7 @@ export default function DashboardPageRoute() {
       products={context.products}
       sales={context.sales}
       expenses={context.expenses}
+      commissionLedger={context.commissionLedger}
       staff={context.staff}
       settings={context.settings}
       setActiveTab={setActiveTab}

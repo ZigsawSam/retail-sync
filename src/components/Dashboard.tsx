@@ -51,6 +51,7 @@ interface DashboardProps {
   products: Product[];
   sales: Sale[];
   expenses: Expense[];
+  commissionLedger?: any[];
   staff: Staff[];
   settings: StoreSettings;
   setActiveTab: (tab: string) => void;
@@ -79,7 +80,8 @@ interface DashboardProps {
 export default function Dashboard({ 
   products, 
   sales, 
-  expenses, 
+  expenses,
+  commissionLedger = [],
   staff, 
   settings, 
   setActiveTab,
@@ -468,18 +470,8 @@ export default function Dashboard({
 
   const pendingStaffPayment = Math.max(0, totalStaffWagesEarned - totalStaffWagesPaid);
 
-  const totalAgentCommissionsEarned = useMemo(() => {
-    return sales
-      .filter(s => s.commissionAgent)
-      .reduce((acc, s) => acc + (s.commissionAgent?.commissionAmount || 0), 0);
-  }, [sales]);
-
-  const totalAgentCommissionsPaid = useMemo(() => {
-    return expenses
-      .filter(e => e.category === "Agent Commission")
-      .reduce((acc, e) => acc + e.amount, 0);
-  }, [expenses]);
-
+  const totalAgentCommissionsEarned = useMemo(() => commissionLedger.reduce((total, row) => total + Number(row.commission_amount || 0), 0), [commissionLedger]);
+  const totalAgentCommissionsPaid = useMemo(() => commissionLedger.reduce((total, row) => total + Number(row.paid_amount || 0), 0), [commissionLedger]);
   const pendingAgentPayment = Math.max(0, totalAgentCommissionsEarned - totalAgentCommissionsPaid);
   const pendingPaymentsTotal = pendingStaffPayment + pendingAgentPayment;
 
@@ -889,6 +881,12 @@ export default function Dashboard({
         </div>
       </div>
  
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button onClick={() => setActiveTab("payments")} className="px-4 py-2 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0_#000]">Open Payments</button>
+        <button onClick={() => setActiveTab("expenses")} className="px-4 py-2 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0_#000]">Open Expenses</button>
+        <button onClick={() => setActiveTab("transactions")} className="px-4 py-2 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0_#000]">View Transaction History</button>
+      </div>
+
       {/* Primary KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {/* Cash In Hand Card (Bauhaus Blue) */}

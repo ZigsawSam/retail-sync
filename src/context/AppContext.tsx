@@ -52,6 +52,8 @@ interface AppContextType {
   products: Product[];
   customers: Customer[];
   commissionAgents: CommissionAgent[];
+  commissionLedger: any[];
+  handleRecordAgentCommissionPayment: (agentPhone: string, amount: number, method: string, notes?: string) => Promise<void>;
   staff: Staff[];
   staffLogins: StaffLogin[];
   sales: Sale[];
@@ -143,10 +145,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [commissionAgents, setCommissionAgents] = useState<CommissionAgent[]>([]);
+  const [commissionLedger, setCommissionLedger] = useState<any[]>([]);
   const [staff, setStaff] = useState<Staff[]>([]);
   const [staffLogins, setStaffLogins] = useState<StaffLogin[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [accountPayments, setAccountPayments] = useState<any[]>([]);
   const [staffExpensesTotal, setStaffExpensesTotal] = useState(0);
   const [settings, setSettings] = useState<StoreSettings>({
     shopName: "My Shop",
@@ -239,10 +243,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setProducts([]);
       setCustomers([]);
       setCommissionAgents([]);
+      setCommissionLedger([]);
       setStaff([]);
       setStaffLogins([]);
       setSales([]);
       setExpenses([]);
+      setAccountPayments([]);
       setCheques([]);
       setElectronicTxs([]);
       setActualDrawerCash(null);
@@ -354,6 +360,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } else {
       setCommissionAgents([]);
     }
+    if (!staffSession) {
+      const { data: ledgerData, error: ledgerError } = await supabase.from("commission_ledger").select("*").eq("user_id", userId).order("created_at", { ascending: false });
+      if (ledgerError && ledgerError.code !== "42P01") setSupabaseError(ledgerError);
+      setCommissionLedger(ledgerData || []);
+    } else {
+      setCommissionLedger([]);
+    }
 
     const { data: staffData } = await supabase.from("staff").select("*").eq("userId", userId);
     setStaff(staffData || []);
@@ -411,8 +424,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Financial data rows remain owner-only.
     if (!staffSession) {
-      const { data: expensesData } = await supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false });
+      const [{ data: expensesData }, { data: accountPaymentData, error: accountPaymentError }] = await Promise.all([
+        supabase.from("expenses").select("*").eq("userId", userId).order("timestamp", { ascending: false }),
+        supabase.from("account_payments").select("*").eq("userId", userId).order("timestamp", { ascending: false }),
+      ]);
       setExpenses(expensesData || []);
+      if (accountPaymentError && accountPaymentError.code !== "42P01") setSupabaseError(accountPaymentError);
+      setAccountPayments(accountPaymentData || []);
 
       const { data: settingsData } = await supabase.from("settings").select("*").eq("id", userId).maybeSingle();
       if (settingsData) {
@@ -439,6 +457,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setElectronicTxs(electronicData || []);
     } else {
       setExpenses([]);
+      setAccountPayments([]);
       setCheques([]);
       setElectronicTxs([]);
     }
@@ -583,6 +602,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const { error } = await supabase.from("commission_agents").update(updates).eq("phone", phone);
     if (error) throw error;
     setCommissionAgents((prev) => prev.map((a) => (a.phone === phone ? { ...a, ...updates } : a)));
+  };
+
+  const handleRecordAgentCommissionPayment = async (agentPhone: string, amount: number, method: string, notes?: string) => {
+    if (!currentUser || staffSession || !tenantOwnerId) throw new Error("Only the shop owner can record agent commission payments.");
+    if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a payment amount greater than zero.");
+    const { error } = await supabase.rpc("record_agent_commission_payment", {
+      p_agent_phone: agentPhone, p_amount: amount, p_method: method, p_notes: notes || null
+    });
+    if (error) throw error;
+    const [{ data: ledgerData, error: ledgerError }, { data: agentData, error: agentError }] = await Promise.all([
+      supabase.from("commission_ledger").select("*").eq("user_id", tenantOwnerId).order("created_at", { ascending: false }),
+      supabase.from("commission_agents").select("*").eq("user_id", tenantOwnerId)
+    ]);
+    if (ledgerError) throw ledgerError;
+    if (agentError) throw agentError;
+    setCommissionLedger(ledgerData || []);
+    setCommissionAgents(agentData || []);
   };
 
   const handleDeleteCommissionAgent = async (phone: string) => {
@@ -755,15 +791,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleResetDatabase = async () => {
     if (!currentUser || staffSession) throw new Error("Only the shop owner can reset store data.");
-    const tables = ["products", "customers", "staff", "sales", "expenses", "cheques", "electronicTxs"];
+    if (!tenantOwnerId) throw new Error("The shop owner account could not be identified.");
+
+    // Delete child/ledger records before their parent records. Some deployments
+    // predate the optional accounting tables, so missing optional relations are skipped.
+    const tables: Array<{ name: string; ownerColumn: string; optional?: boolean }> = [
+      { name: "account_payments", ownerColumn: "userId", optional: true },
+      { name: "purchases", ownerColumn: "userId", optional: true },
+      { name: "sales", ownerColumn: "userId" },
+      { name: "expenses", ownerColumn: "userId" },
+      { name: "cheques", ownerColumn: "userId" },
+      { name: "electronicTxs", ownerColumn: "userId" },
+      { name: "staff_logins", ownerColumn: "user_id" },
+      { name: "commission_agents", ownerColumn: "user_id", optional: true },
+      { name: "staff", ownerColumn: "userId" },
+      { name: "customers", ownerColumn: "userId" },
+      { name: "suppliers", ownerColumn: "userId", optional: true },
+      { name: "products", ownerColumn: "userId" },
+    ];
+
     for (const table of tables) {
-      const { error } = await supabase.from(table).delete().eq("userId", tenantOwnerId);
-      if (error) throw error;
+      const { error } = await supabase.from(table.name).delete().eq(table.ownerColumn, tenantOwnerId);
+      if (!error) continue;
+      const relationMissing = error.code === "PGRST205" || error.code === "42P01";
+      if (table.optional && relationMissing) continue;
+      throw new Error(`Unable to reset ${table.name}: ${error.message}`);
     }
-    const { error: agentsError } = await supabase.from("commission_agents").delete().eq("user_id", tenantOwnerId);
-    if (agentsError) throw agentsError;
-    const { error: loginsError } = await supabase.from("staff_logins").delete().eq("user_id", tenantOwnerId);
-    if (loginsError) throw loginsError;
+
     setProducts([]);
     setCustomers([]);
     setCommissionAgents([]);
@@ -771,6 +825,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setStaffLogins([]);
     setSales([]);
     setExpenses([]);
+    setAccountPayments([]);
     setCheques([]);
     setElectronicTxs([]);
   };
@@ -824,7 +879,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const handleRoleChange = (role: ERPRole) => {
     if (!staffSession) setSelectedRole(role);
   };
-  const cashInHand = Number(settings.startingBalance || 0) + sales.reduce((total, sale) => total + Number(sale.totalAmount || 0), 0) - (staffSession ? staffExpensesTotal : expenses.reduce((total, expense) => total + Number(expense.amount || 0), 0));
+  const cashInHand = staffSession
+    ? Number(settings.startingBalance || 0) + sales.filter((sale) => (sale.paymentMethod === "Cash" || sale.paymentMethod === "Store Credit")).reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0) - staffExpensesTotal
+    : Number(settings.startingBalance || 0)
+      + sales.filter((sale) => (sale.paymentMethod === "Cash" || sale.paymentMethod === "Store Credit")).reduce((total, sale) => total + Number(sale.paidAmount ?? sale.totalAmount ?? 0), 0)
+      + accountPayments.filter((payment) => payment.party_type === "customer" && payment.direction === "received" && payment.payment_method === "Cash").reduce((total, payment) => total + Number(payment.amount || 0), 0)
+      - expenses.filter((expense) => !expense.paymentMethod || expense.paymentMethod === "Cash").reduce((total, expense) => total + Number(expense.amount || 0), 0)
+      - accountPayments.filter((payment) => payment.party_type === "supplier" && payment.direction === "paid" && payment.payment_method === "Cash").reduce((total, payment) => total + Number(payment.amount || 0), 0);
   const currencyCode = currencyOverride || (settings.currency && /^[A-Z]{3}$/.test(settings.currency) ? settings.currency : "INR");
   const currency = (() => {
     try { return new Intl.NumberFormat("en", { style: "currency", currency: currencyCode }).formatToParts(0).find((part) => part.type === "currency")?.value || currencyCode; }
@@ -853,6 +914,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         products,
         customers,
         commissionAgents,
+        commissionLedger,
+        handleRecordAgentCommissionPayment,
         staff,
         staffLogins,
         sales,
