@@ -26,6 +26,7 @@ interface OperationsPageProps {
   onUpdateProductStock: (productId: string, newStock: number) => void;
   onDeleteProduct: (productId: string) => void;
   onAddExpense: (expense: Expense) => void;
+  productCategories?: { name: string; subcategories: string[] }[];
 }
 
 export default function OperationsPage({
@@ -35,7 +36,8 @@ export default function OperationsPage({
   onAddProduct,
   onUpdateProductStock,
   onDeleteProduct,
-  onAddExpense
+  onAddExpense,
+  productCategories = []
 }: OperationsPageProps) {
   // Tabs for restock methods
   const [restockTab, setRestockTab] = useState<"quick" | "bulk" | "csv">("quick");
@@ -50,7 +52,7 @@ export default function OperationsPage({
 
   // --- Form States: Quick Add ---
   const [quickName, setQuickName] = useState("");
-  const [quickCategory, setQuickCategory] = useState("Apparel");
+  const [quickCategory, setQuickCategory] = useState(configuredCategories[0] || "Other");
   const [quickPurchasePrice, setQuickPurchasePrice] = useState("");
   const [quickSellingPrice, setQuickSellingPrice] = useState("");
   const [quickQuantity, setQuickQuantity] = useState("");
@@ -60,7 +62,7 @@ export default function OperationsPage({
 
   // --- Form States: Bulk Add ---
   const [bulkRows, setBulkRows] = useState<Partial<Product>[]>([
-    { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
+    { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
     { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" },
     { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }
   ]);
@@ -71,9 +73,8 @@ export default function OperationsPage({
   const [csvLogMessage, setCsvLogMessage] = useState("");
 
   // Categories list
-  const categories = useMemo(() => {
-    return ["All", ...Array.from(new Set(products.map(p => p.category)))];
-  }, [products]);
+  const configuredCategories = useMemo(() => productCategories.flatMap((item) => item.subcategories?.length ? item.subcategories.map((sub) => `${item.name} / ${sub}`) : [item.name]), [productCategories]);
+  const categories = useMemo(() => ["All", ...Array.from(new Set([...configuredCategories, ...products.map(p => p.category)]))], [products, configuredCategories]);
 
   // Filtered Inventory Stock Levels
   const filteredProducts = useMemo(() => {
@@ -138,7 +139,7 @@ export default function OperationsPage({
   };
 
   const addBulkRow = () => {
-    setBulkRows([...bulkRows, { name: "", category: "Apparel", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }]);
+    setBulkRows([...bulkRows, { name: "", category: configuredCategories[0] || "Other", purchasePrice: 0, sellingPrice: 0, quantity: 0, barcode: "" }]);
   };
 
   const removeBulkRow = (index: number) => {
@@ -156,7 +157,7 @@ export default function OperationsPage({
       const newProd: Product = {
         id: "prod-" + (Date.now() + idx),
         name: row.name!,
-        category: row.category || "Apparel",
+        category: row.category || configuredCategories[0] || "Other",
         purchasePrice: Number(row.purchasePrice) || 0,
         sellingPrice: Number(row.sellingPrice) || 0,
         quantity: Number(row.quantity) || 0,
@@ -370,11 +371,7 @@ export default function OperationsPage({
                     onChange={(e) => setQuickCategory(e.target.value)}
                     className="w-full px-3 py-2 bg-white border-2 border-black text-black rounded-none text-xs font-bold focus:outline-none cursor-pointer"
                   >
-                    <option value="Apparel">Apparel</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Furniture">Furniture</option>
-                    <option value="Groceries">Groceries</option>
-                    <option value="Kitchenware">Kitchenware</option>
+                    {(configuredCategories.length ? configuredCategories : ["Grocery & Food","Beverages","Personal Care","Household & Cleaning","Clothing & Apparel","Electronics & Accessories","Other"]).map((category) => <option key={category} value={category}>{category}</option>)}
                   </select>
                 </div>
 
