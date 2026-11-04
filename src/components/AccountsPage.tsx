@@ -205,6 +205,7 @@ export default function AccountsPage() {
         <p className="text-xs font-bold bg-zinc-100 p-2">Purchase total: {money(Number(quantity||0)*Number(purchasePrice||0))} · Due: {money(Math.max(0,Number(quantity||0)*Number(purchasePrice||0)-Number(paidAmount||0)))}</p>
         <button className={buttonClass} disabled={busy || loading}>Save purchase & add stock</button>
       </form>
+    </section>
     <section className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000]">
       <h2 className="font-black uppercase text-lg mb-3">Purchase history</h2>
       <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr className="border-b-2 border-black text-xs uppercase"><th className="p-2">Date / Invoice</th><th className="p-2">Supplier</th><th className="p-2 text-right">Total</th><th className="p-2 text-right">Paid</th><th className="p-2 text-right">Due</th></tr></thead><tbody>{purchases.map(p=><tr key={p.id} className="border-b border-zinc-200"><td className="p-2">{new Date(p.timestamp).toLocaleDateString("en-IN")}<small className="block text-zinc-500">{p.invoice_number || p.id}</small></td><td className="p-2">{p.supplier_name}</td><td className="p-2 text-right">{money(Number(p.total_amount))}</td><td className="p-2 text-right">{money(Number(p.paid_amount))}</td><td className="p-2 text-right font-black">{money(Number(p.due_amount))}</td></tr>)}</tbody></table></div>
