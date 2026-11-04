@@ -88,7 +88,7 @@ export interface Sale {
 
 export interface Expense {
   id: string;
-  category: "Staff Salary" | "Agent Commission" | "Inventory Purchase" | "Rent" | "Utilities" | "Other" | "Drawer Cash Addition" | "Drawer Cash Withdrawal";
+  category: string;
   amount: number;
   description: string;
   timestamp: string;
