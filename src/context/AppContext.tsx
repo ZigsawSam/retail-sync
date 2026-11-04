@@ -384,6 +384,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (settingsData) {
         setSettings({
           shopName: settingsData.shopName || "My Shop",
+          shopCategory: settingsData.shop_category || settingsData.shopCategory || "",
+          shopSubcategory: settingsData.shop_subcategory || settingsData.shopSubcategory || "",
+          productCategories: settingsData.product_categories || settingsData.productCategories || [],
+          expenseCategories: settingsData.expense_categories || settingsData.expenseCategories || [],
           taxRate: settingsData.taxRate ?? 5,
           currency: settingsData.currency || "Rs",
           startingBalance: settingsData.startingBalance ?? 0,
@@ -684,6 +688,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const dbUpdates: any = {};
     if (updates.shopName !== undefined) dbUpdates.shopName = updates.shopName;
+    if (updates.shopCategory !== undefined) dbUpdates.shop_category = updates.shopCategory;
+    if (updates.shopSubcategory !== undefined) dbUpdates.shop_subcategory = updates.shopSubcategory;
+    if (updates.productCategories !== undefined) dbUpdates.product_categories = updates.productCategories;
+    if (updates.expenseCategories !== undefined) dbUpdates.expense_categories = updates.expenseCategories;
     if (updates.taxRate !== undefined) dbUpdates.taxRate = updates.taxRate;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
     if (updates.startingBalance !== undefined) dbUpdates.startingBalance = updates.startingBalance;
