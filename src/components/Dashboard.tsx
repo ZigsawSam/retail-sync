@@ -889,6 +889,12 @@ export default function Dashboard({
         </div>
       </div>
  
+      <div className="flex flex-wrap gap-2 mb-6">
+        <button onClick={() => setActiveTab("payments")} className="px-4 py-2 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0_#000]">Open Payments</button>
+        <button onClick={() => setActiveTab("expenses")} className="px-4 py-2 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0_#000]">Open Expenses</button>
+        <button onClick={() => setActiveTab("transactions")} className="px-4 py-2 bg-white border-2 border-black text-xs font-black uppercase shadow-[2px_2px_0_#000]">View Transaction History</button>
+      </div>
+
       {/* Primary KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {/* Cash In Hand Card (Bauhaus Blue) */}
