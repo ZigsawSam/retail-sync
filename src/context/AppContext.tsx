@@ -763,15 +763,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const handleResetDatabase = async () => {
     if (!currentUser || staffSession) throw new Error("Only the shop owner can reset store data.");
-    const tables = ["products", "customers", "staff", "sales", "expenses", "cheques", "electronicTxs"];
-    for (const table of tables) {
-      const { error } = await supabase.from(table).delete().eq("userId", tenantOwnerId);
-      if (error) throw error;
+    if (!tenantOwnerId) throw new Error("The shop owner account could not be identified.");
+
+    // Delete dependent financial and operational records before their parent records.
+    // commission_agents is a legacy/optional table and is not present in every deployment.
+    const ownerTables = [
+      "account_payments",
+      "purchases",
+      "sales",
+      "expenses",
+      "cheques",
+      "electronicTxs",
+      "staff_logins",
+      "staff",
+      "customers",
+      "suppliers",
+      "products",
+    ];
+
+    for (const table of ownerTables) {
+      const { error } = await supabase.from(table).delete().eq(
+        table === "staff_logins" ? "user_id" : "userId",
+        tenantOwnerId
+      );
+      if (error) throw new Error(`Unable to reset ${table}: ${error.message}`);
     }
+
     const { error: agentsError } = await supabase.from("commission_agents").delete().eq("user_id", tenantOwnerId);
-    if (agentsError) throw agentsError;
-    const { error: loginsError } = await supabase.from("staff_logins").delete().eq("user_id", tenantOwnerId);
-    if (loginsError) throw loginsError;
+    if (agentsError && agentsError.code !== "PGRST205" && agentsError.code !== "42P01") {
+      throw new Error(`Unable to reset commission agents: ${agentsError.message}`);
+    }
+
     setProducts([]);
     setCustomers([]);
     setCommissionAgents([]);
@@ -779,6 +801,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setStaffLogins([]);
     setSales([]);
     setExpenses([]);
+    setAccountPayments([]);
     setCheques([]);
     setElectronicTxs([]);
   };
