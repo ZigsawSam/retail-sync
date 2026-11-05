@@ -8,7 +8,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 type Supplier = { id: string; name: string; phone?: string | null; address?: string | null; gst_number?: string | null; owner_name?: string | null; email?: string | null; alternate_phone?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null; notes?: string | null };
 type Purchase = { id: string; supplier_id: string | null; supplier_name: string; invoice_number?: string | null; total_amount: number; paid_amount: number; due_amount: number; payment_method: string; timestamp: string; transporter_id?: string | null; transporter_name?: string | null; freight_amount?: number; freight_paid_amount?: number; freight_due_amount?: number; delivery_mode?: string | null };
 type Transporter = { id: string; name: string; phone?: string | null };
-type PurchaseLine = { productId: string; name: string; quantity: number; purchasePrice: number };
+type PurchaseLine = { productId: string; name: string; quantity: number; purchasePrice: number; purchaseQuantity?: number; purchaseUnit?: string; baseUnit?: string; unitsPerPurchaseUnit?: number; purchaseUnitCost?: number };
 type DueCustomer = { id: string; name: string; phone: string; due: number };
 
 const inputClass = "w-full px-3 py-2.5 border-2 border-black bg-white text-sm font-bold text-black focus:outline-none";
@@ -145,58 +145,69 @@ export default function AccountsPage() {
   };
 
   type NewProductRow = {name:string;category:string;cost:string;selling:string;barcode:string;quantity:string;purchaseUnit:string;baseUnit:string;conversion:string};
-  const createCatalogProduct = async (row: NewProductRow) => {
+  const addNewProductsToInvoice = async (rows: NewProductRow[]) => {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) throw new Error("Please sign in as the shop owner.");
-    const qty=Number(row.quantity), factor=Number(row.conversion), unitCost=Number(row.cost), selling=Number(row.selling);
-    if (!row.name.trim() || !Number.isFinite(unitCost) || unitCost < 0 || !Number.isFinite(selling) || selling <= 0) throw new Error("Enter a product name, valid purchase cost and selling price.");
-    if (!Number.isInteger(qty) || qty <= 0 || !Number.isInteger(factor) || factor <= 0) throw new Error("Purchased quantity and units per purchase unit must be positive whole numbers.");
-    if (!row.purchaseUnit.trim() || !row.baseUnit.trim()) throw new Error("Enter both purchase unit and stock unit.");
-    const { data, error } = await supabase.from("products").insert([{
-      userId: auth.user.id, name: row.name.trim(), category: row.category || "Other",
-      purchasePrice: unitCost/factor, sellingPrice: selling, quantity: 0,
-      barcode: row.barcode.trim() || "SKU-" + Date.now(), lowStockLimit: 5, overstockLimit: 40,
-      purchase_unit: row.purchaseUnit.trim(), base_unit: row.baseUnit.trim(), units_per_purchase_unit: factor
-    }]).select().single();
-    if (error) throw error;
-    return {product:data, invoiceLine:{productId:data.id,name:data.name,quantity:qty*factor,purchasePrice:unitCost/factor}};
-  };
-  const addNewProductsToInvoice = async (rows: NewProductRow[]) => {
-    const created=[];
-    for (const row of rows) created.push(await createCatalogProduct(row));
-    setPurchaseLines(old=>[...old,...created.map(x=>x.invoiceLine)]);
+    const prepared = rows.map(row => {
+      const quantity=Number(row.quantity), factor=Number(row.conversion), unitCost=Number(row.cost), selling=Number(row.selling);
+      if (!row.name.trim()) throw new Error("Every product row needs a product name.");
+      if (!Number.isInteger(quantity)||quantity<=0||!Number.isInteger(factor)||factor<=0) throw new Error(`Enter a positive whole purchased quantity and conversion factor for ${row.name}.`);
+      if (!row.purchaseUnit.trim()||!row.baseUnit.trim()) throw new Error(`Enter both units for ${row.name}.`);
+      if (!Number.isFinite(unitCost)||unitCost<0||!Number.isFinite(selling)||selling<=0) throw new Error(`Enter valid purchase cost and selling price for ${row.name}.`);
+      return {row,quantity,factor,unitCost,selling};
+    });
+    const inserts=prepared.map(({row,factor,unitCost,selling})=>({
+      userId:auth.user!.id,name:row.name.trim(),category:row.category.trim()||"Other",
+      purchasePrice:unitCost/factor,sellingPrice:selling,quantity:0,
+      barcode:row.barcode.trim()||"SKU-"+crypto.randomUUID(),
+      lowStockLimit:5,overstockLimit:40,
+      purchase_unit:row.purchaseUnit.trim(),base_unit:row.baseUnit.trim(),units_per_purchase_unit:factor
+    }));
+    // One insert prevents a failed bulk import from leaving a partially-created catalogue.
+    const {data,error}=await supabase.from("products").insert(inserts).select();
+    if(error) throw error;
+    if(!data||data.length!==prepared.length) throw new Error("The database did not confirm every product row.");
+    setPurchaseLines(old=>[...old,...data.map((product,i)=>({
+      productId:product.id,name:product.name,quantity:prepared[i].quantity*prepared[i].factor,
+      purchasePrice:prepared[i].unitCost/prepared[i].factor,
+      purchaseQuantity:prepared[i].quantity,purchaseUnit:prepared[i].row.purchaseUnit.trim(),
+      baseUnit:prepared[i].row.baseUnit.trim(),unitsPerPurchaseUnit:prepared[i].factor,
+      purchaseUnitCost:prepared[i].unitCost
+    }))]);
     await refreshData();
-    setProductSource("existing"); setSelectedProduct(""); setShowProductCreator(false);
+    setProductSource("existing");setSelectedProduct("");setShowProductCreator(false);
   };
   const saveQuickProduct = async (e: React.FormEvent) => {
-    e.preventDefault(); setBusy(true); setProductImportMessage("");
-    try { await addNewProductsToInvoice([{name:newProductName,category:newProductCategory,cost:newProductCost,selling:newProductSelling,barcode:newProductBarcode,quantity:newProductQuantity,purchaseUnit:newProductPurchaseUnit,baseUnit:newProductBaseUnit,conversion:newProductConversion}]); setNewProductName(""); setNewProductCost(""); setNewProductSelling(""); setNewProductBarcode(""); setNewProductQuantity("1"); }
-    catch(error:any) { setProductImportMessage(error?.message || "Unable to create product."); } finally { setBusy(false); }
+    e.preventDefault();setBusy(true);setProductImportMessage("");
+    try {
+      await addNewProductsToInvoice([{name:newProductName,category:newProductCategory,cost:newProductCost,selling:newProductSelling,barcode:newProductBarcode,quantity:newProductQuantity,purchaseUnit:newProductPurchaseUnit,baseUnit:newProductBaseUnit,conversion:newProductConversion}]);
+      setNewProductName("");setNewProductCost("");setNewProductSelling("");setNewProductBarcode("");setNewProductQuantity("1");
+    } catch(error:any){setProductImportMessage(error?.message||"Unable to create product.");}finally{setBusy(false);}
   };
   const saveBulkProducts = async (e: React.FormEvent) => {
-    e.preventDefault(); setBusy(true); setProductImportMessage("");
-    try { const rows=bulkProductRows.filter(row=>row.name.trim()); if(!rows.length) throw new Error("Add at least one product row."); await addNewProductsToInvoice(rows); }
-    catch(error:any) { setProductImportMessage(error?.message || "Bulk product creation failed."); } finally { setBusy(false); }
+    e.preventDefault();setBusy(true);setProductImportMessage("");
+    try {const rows=bulkProductRows.filter(row=>row.name.trim());if(!rows.length)throw new Error("Add at least one product row.");await addNewProductsToInvoice(rows);}
+    catch(error:any){setProductImportMessage(error?.message||"Bulk product creation failed.");}finally{setBusy(false);}
   };
   const parseCsv = (source:string) => {
-    const rows:string[][]=[]; let row:string[]=[]; let value=""; let quoted=false;
-    for(let i=0;i<source.length;i++){const ch=source[i]; if(ch==='"'&&source[i+1]==='"'&&quoted){value+='"';i++;}else if(ch==='"'){quoted=!quoted;}else if(ch===","&&!quoted){row.push(value);value="";}else if((ch==="\n"||ch==="\r")&&!quoted){if(ch==="\r"&&source[i+1]==="\n")i++;row.push(value);if(row.some(x=>x.trim()))rows.push(row);row=[];value="";}else value+=ch;}
+    const rows:string[][]=[];let row:string[]=[];let value="";let quoted=false;
+    for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'&&source[i+1]==='"'&&quoted){value+='"';i++;}else if(ch==='"'){quoted=!quoted;}else if(ch===","&&!quoted){row.push(value);value="";}else if((ch==="\\n"||ch==="\\r")&&!quoted){if(ch==="\\r"&&source[i+1]==="\\n")i++;row.push(value);if(row.some(x=>x.trim()))rows.push(row);row=[];value="";}else value+=ch;}
     row.push(value);if(row.some(x=>x.trim()))rows.push(row);return rows;
   };
   const importProductsCsv = async (file: File) => {
-    setBusy(true); setProductImportMessage("");
+    setBusy(true);setProductImportMessage("");
     try {
-      const parsed=parseCsv(await file.text()); const headers=(parsed.shift()||[]).map(x=>x.trim().toLowerCase());
+      const parsed=parseCsv(await file.text());const headers=(parsed.shift()||[]).map(x=>x.trim().toLowerCase());
       const col=(...names:string[])=>headers.findIndex(h=>names.includes(h));
       const name=col("product name","name"),category=col("category"),quantity=col("purchase quantity","quantity"),purchaseUnit=col("purchase unit","purchase_unit"),baseUnit=col("stock unit","base unit","base_unit"),conversion=col("units per purchase unit","conversion factor","units_per_purchase_unit"),cost=col("purchase cost per purchase unit","purchase cost","purchaseprice","purchase_price"),selling=col("selling price","sellingprice","selling_price","mrp"),barcode=col("barcode","sku");
-      if(name<0||quantity<0||purchaseUnit<0||baseUnit<0||conversion<0||cost<0||selling<0) throw new Error("CSV must include all columns from the downloadable template.");
+      if([name,quantity,purchaseUnit,baseUnit,conversion,cost,selling].some(i=>i<0))throw new Error("CSV must include all columns from the downloadable template.");
       const rows:NewProductRow[]=parsed.filter(r=>r[name]?.trim()).map(r=>({name:r[name],category:category>=0?r[category]:"",quantity:r[quantity],purchaseUnit:r[purchaseUnit],baseUnit:r[baseUnit],conversion:r[conversion],cost:r[cost],selling:r[selling],barcode:barcode>=0?r[barcode]:""}));
-      if(!rows.length) throw new Error("No product rows found in the CSV.");
+      if(!rows.length)throw new Error("No product rows found in the CSV.");
       await addNewProductsToInvoice(rows);
-    } catch(error:any){setProductImportMessage(error?.message||"CSV import failed.");} finally{setBusy(false);}
+    }catch(error:any){setProductImportMessage(error?.message||"CSV import failed.");}finally{setBusy(false);}
   };
-  const csvTemplate = "Product Name,Category,Purchase Quantity,Purchase Unit,Stock Unit,Units per Purchase Unit,Purchase Cost per Purchase Unit,Selling Price,Barcode\nSample Product,Grocery,3,Box,Piece,12,240,25,SKU-001\n";
-  const downloadCsvTemplate = () => { const blob=new Blob([csvTemplate],{type:"text/csv;charset=utf-8;"}); const url=URL.createObjectURL(blob); const link=document.createElement("a"); link.href=url; link.download="retail-sync-purchase-template.csv"; link.click(); URL.revokeObjectURL(url); };
+  const csvTemplate="Product Name,Category,Purchase Quantity,Purchase Unit,Stock Unit,Units per Purchase Unit,Purchase Cost per Purchase Unit,Selling Price,Barcode\\nSample Product,Grocery,3,Box,Piece,12,240,25,SKU-001\\n";
+  const downloadCsvTemplate=()=>{const blob=new Blob([csvTemplate],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="retail-sync-purchase-template.csv";link.click();URL.revokeObjectURL(url);};
   const addLineToPurchase = () => {
     const product = products.find(p => p.id === selectedProduct);
     const qty = Number(quantity); const cost = Number(purchasePrice || product?.purchasePrice || 0);
@@ -206,8 +217,8 @@ export default function AccountsPage() {
     setPurchaseLines(old => {
       const existing = old.find(line => line.productId === product.id);
       return existing
-        ? old.map(line => line.productId === product.id ? { ...line, quantity: line.quantity + qty, purchasePrice: cost } : line)
-        : [...old, { productId: product.id, name: product.name, quantity: qty, purchasePrice: cost }];
+        ? old.map(line => line.productId === product.id ? { ...line, quantity: line.quantity + qty, purchasePrice: cost, purchaseQuantity: (line.purchaseQuantity || 0) + qty, purchaseUnit: product.purchase_unit || line.baseUnit || "Piece", baseUnit: product.base_unit || "Piece", unitsPerPurchaseUnit: 1, purchaseUnitCost: cost } : line)
+        : [...old, { productId: product.id, name: product.name, quantity: qty, purchasePrice: cost, purchaseQuantity: qty, purchaseUnit: product.purchase_unit || "Piece", baseUnit: product.base_unit || "Piece", unitsPerPurchaseUnit: 1, purchaseUnitCost: cost }];
     });
     setSelectedProduct(""); setQuantity("1"); setPurchasePrice(""); setProductSource("existing"); setMessage("");
   };
@@ -229,7 +240,7 @@ export default function AccountsPage() {
       const { error } = await supabase.rpc("create_purchase_with_logistics", { p_purchase: {
         request_id: requestId,
         supplier_id: selectedSupplier || null, supplier_name: supplier?.name || "Unspecified supplier",
-        invoice_number: invoiceNumber || null, items: purchaseLines.map(({productId,quantity,purchasePrice}) => ({productId,quantity,purchasePrice})),
+        invoice_number: invoiceNumber || null, items: purchaseLines.map(line => ({productId:line.productId,quantity:line.quantity,purchasePrice:line.purchasePrice,purchaseQuantity:line.purchaseQuantity ?? line.quantity,purchaseUnit:line.purchaseUnit ?? "Piece",baseUnit:line.baseUnit ?? "Piece",unitsPerPurchaseUnit:line.unitsPerPurchaseUnit ?? 1,purchaseUnitCost:line.purchaseUnitCost ?? line.purchasePrice})),
         paid_amount: paid, payment_method: purchaseMethod, notes: null,
         purchase_source: purchaseSource, delivery_mode: deliveryMode,
         transporter_id: selectedTransporter || null, freight_amount: freight,
@@ -319,7 +330,7 @@ export default function AccountsPage() {
         <button type="button" className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase" onClick={addLineToPurchase}>Add product to invoice</button>
         <div className="border-2 border-black p-3 space-y-2">
           <h3 className="text-xs font-black uppercase">Invoice items ({purchaseLines.length})</h3>
-          {purchaseLines.length===0 ? <p className="text-xs text-zinc-500">No products added yet.</p> : purchaseLines.map(line=><div key={line.productId} className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 text-xs"><span className="font-bold">{line.name} · {line.quantity} × {money(line.purchasePrice)}</span><span className="font-black">{money(line.quantity*line.purchasePrice)} <button type="button" onClick={()=>removePurchaseLine(line.productId)} className="ml-2 underline text-red-700">Remove</button></span></div>)}
+          {purchaseLines.length===0 ? <p className="text-xs text-zinc-500">No products added yet.</p> : purchaseLines.map(line=><div key={line.productId} className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 text-xs"><span className="font-bold">{line.name} · {line.purchaseQuantity ?? line.quantity} {line.purchaseUnit ?? "units"} ({line.quantity} {line.baseUnit ?? "stock units"}) × {money(line.purchaseUnitCost ?? line.purchasePrice)}</span><span className="font-black">{money(line.quantity*line.purchasePrice)} <button type="button" onClick={()=>removePurchaseLine(line.productId)} className="ml-2 underline text-red-700">Remove</button></span></div>)}
           <div className="text-right font-black text-sm">Goods total: {money(purchaseLines.reduce((sum,line)=>sum+line.quantity*line.purchasePrice,0))}</div>
         </div>
         <div><label className="block text-xs font-black uppercase mb-1">Supplier invoice number</label><input className={inputClass} value={invoiceNumber} onChange={e=>setInvoiceNumber(e.target.value)} placeholder="Optional"/></div>
