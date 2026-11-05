@@ -52,11 +52,6 @@ export default function SettingsPage({
   const [shopCategory, setShopCategory] = useState(settings.shopCategory || "");
   const [shopSubcategory, setShopSubcategory] = useState(settings.shopSubcategory || "");
   const [productCategories, setProductCategories] = useState(settings.productCategories?.length ? settings.productCategories : DEFAULT_PRODUCT_CATEGORIES);
-  const [unitConversions, setUnitConversions] = useState(settings.unitConversions || []);
-  const [presetName, setPresetName] = useState("");
-  const [presetPurchaseUnit, setPresetPurchaseUnit] = useState("Box");
-  const [presetBaseUnit, setPresetBaseUnit] = useState("Piece");
-  const [presetFactor, setPresetFactor] = useState("1");
   const [expenseCategories, setExpenseCategories] = useState(settings.expenseCategories?.length ? settings.expenseCategories : DEFAULT_EXPENSE_CATEGORIES);
   const [newProductCategory, setNewProductCategory] = useState("");
   const [newProductSubcategory, setNewProductSubcategory] = useState("");
@@ -85,7 +80,6 @@ export default function SettingsPage({
     setShopCategory(settings.shopCategory || "");
     setShopSubcategory(settings.shopSubcategory || "");
     setProductCategories(settings.productCategories?.length ? settings.productCategories : DEFAULT_PRODUCT_CATEGORIES);
-    setUnitConversions(settings.unitConversions || []);
     setExpenseCategories(settings.expenseCategories?.length ? settings.expenseCategories : DEFAULT_EXPENSE_CATEGORIES);
     setTaxRate(settings.taxRate ?? 5);
     setCurrency(settings.currency || "Rs");
@@ -107,7 +101,6 @@ export default function SettingsPage({
         shopCategory,
         shopSubcategory,
         productCategories,
-        unitConversions,
         expenseCategories,
         taxRate,
         currency,
