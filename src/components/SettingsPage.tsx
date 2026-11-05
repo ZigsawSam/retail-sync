@@ -52,6 +52,11 @@ export default function SettingsPage({
   const [shopCategory, setShopCategory] = useState(settings.shopCategory || "");
   const [shopSubcategory, setShopSubcategory] = useState(settings.shopSubcategory || "");
   const [productCategories, setProductCategories] = useState(settings.productCategories?.length ? settings.productCategories : DEFAULT_PRODUCT_CATEGORIES);
+  const [unitConversions, setUnitConversions] = useState(settings.unitConversions || []);
+  const [presetName, setPresetName] = useState("");
+  const [presetPurchaseUnit, setPresetPurchaseUnit] = useState("Box");
+  const [presetBaseUnit, setPresetBaseUnit] = useState("Piece");
+  const [presetFactor, setPresetFactor] = useState("1");
   const [expenseCategories, setExpenseCategories] = useState(settings.expenseCategories?.length ? settings.expenseCategories : DEFAULT_EXPENSE_CATEGORIES);
   const [newProductCategory, setNewProductCategory] = useState("");
   const [newProductSubcategory, setNewProductSubcategory] = useState("");
@@ -80,6 +85,7 @@ export default function SettingsPage({
     setShopCategory(settings.shopCategory || "");
     setShopSubcategory(settings.shopSubcategory || "");
     setProductCategories(settings.productCategories?.length ? settings.productCategories : DEFAULT_PRODUCT_CATEGORIES);
+    setUnitConversions(settings.unitConversions || []);
     setExpenseCategories(settings.expenseCategories?.length ? settings.expenseCategories : DEFAULT_EXPENSE_CATEGORIES);
     setTaxRate(settings.taxRate ?? 5);
     setCurrency(settings.currency || "Rs");
@@ -101,6 +107,7 @@ export default function SettingsPage({
         shopCategory,
         shopSubcategory,
         productCategories,
+        unitConversions,
         expenseCategories,
         taxRate,
         currency,
@@ -257,6 +264,18 @@ export default function SettingsPage({
             <div className="space-y-1 text-xs">{productCategories.map((x:any)=><div key={x.name} className="flex justify-between gap-2 border-b py-1"><span><strong>{x.name}</strong>{x.subcategories?.length ? " · "+x.subcategories.join(", ") : ""}</span><span className="flex gap-2"><button type="button" onClick={()=>{const next=prompt("Rename product category",x.name)?.trim();if(next)setProductCategories(productCategories.map((v:any)=>v.name===x.name?{...v,name:next}:v));}} className="font-bold">Rename</button><button type="button" onClick={()=>setProductCategories(productCategories.filter((v:any)=>v.name!==x.name))} className="text-red-700 font-bold">Remove</button></span></div>)}</div>
           </div>
           <div className="space-y-3 border-2 border-black p-4">
+          <div className="space-y-3 border-2 border-black p-4">
+            <h3 className="font-black uppercase text-sm">Units & Packaging Conversions</h3>
+            <p className="text-xs text-zinc-600">Create reusable packaging rules here. Example: 12 × 18 Tile Box = 6 Pieces; 12 × 12 Tile Box = 8 Pieces. The purchase popup will let you select a saved rule instead of typing the conversion each time.</p>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <input value={presetName} onChange={e=>setPresetName(e.target.value)} placeholder="Preset name (e.g. 12×18 Tile Box)" className="border-2 border-black px-2 py-2 text-sm" />
+              <select value={presetPurchaseUnit} onChange={e=>setPresetPurchaseUnit(e.target.value)} className="border-2 border-black px-2 py-2 text-sm">{["Box","Carton","Packet","Bag","Kg","Gram","Litre","Millilitre","Meter","Centimeter","Feet","Inch","Piece","Dozen","Pair","Roll","Bundle","Bottle","Can","Tin","Sheet","Set"].map(u=><option key={u}>{u}</option>)}</select>
+              <select value={presetBaseUnit} onChange={e=>setPresetBaseUnit(e.target.value)} className="border-2 border-black px-2 py-2 text-sm">{["Piece","Kg","Gram","Litre","Millilitre","Meter","Centimeter","Feet","Inch","Sheet","Pair"].map(u=><option key={u}>{u}</option>)}</select>
+              <div className="flex gap-2"><input type="number" min="0.000001" step="any" value={presetFactor} onChange={e=>setPresetFactor(e.target.value)} placeholder="Base units" className="min-w-0 w-full border-2 border-black px-2 py-2 text-sm"/><button type="button" onClick={()=>{const name=presetName.trim(),factor=Number(presetFactor);if(!name||!Number.isFinite(factor)||factor<=0)return;setUnitConversions(old=>[...old.filter(x=>x.name.toLowerCase()!==name.toLowerCase()),{name,purchaseUnit:presetPurchaseUnit,baseUnit:presetBaseUnit,factor}]);setPresetName("");setPresetFactor("1");}} className="border-2 border-black bg-[#FFC300] px-3 text-xs font-black">ADD</button></div>
+            </div>
+            <div className="space-y-1 text-xs">{unitConversions.map((x:any)=><div key={x.name} className="flex justify-between gap-2 border-b py-2"><span><strong>{x.name}</strong> · 1 {x.purchaseUnit} = {x.factor} {x.baseUnit}</span><button type="button" onClick={()=>setUnitConversions(old=>old.filter((v:any)=>v.name!==x.name))} className="font-bold text-red-700">Remove</button></div>)}</div>
+            <p className="text-xs text-zinc-600">Click Save Settings below to apply changes. You can create different presets for different product sizes.</p>
+          </div>
             <h3 className="font-black uppercase text-sm">Expense Categories</h3>
             <div className="flex gap-2">
               <input value={newExpenseCategory} onChange={e => setNewExpenseCategory(e.target.value)} placeholder="New category" className="min-w-0 flex-1 border-2 border-black px-2 py-2 text-sm" />
