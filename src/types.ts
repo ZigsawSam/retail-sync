@@ -116,11 +116,19 @@ export interface ShopCategory {
   subcategories: string[];
 }
 
+export interface UnitConversionPreset {
+  name: string;
+  purchaseUnit: string;
+  baseUnit: string;
+  factor: number;
+}
+
 export interface StoreSettings {
   shopName: string;
   shopCategory?: string;
   shopSubcategory?: string;
   productCategories?: ShopCategory[];
+  unitConversions?: UnitConversionPreset[];
   expenseCategories?: ShopCategory[];
   taxRate: number; // e.g., 5 for 5%
   currency: string; // e.g., "$" or "Rs"
