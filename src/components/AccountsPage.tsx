@@ -191,7 +191,7 @@ export default function AccountsPage() {
   };
   const parseCsv = (source:string) => {
     const rows:string[][]=[];let row:string[]=[];let value="";let quoted=false;
-    for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'&&source[i+1]==='"'&&quoted){value+='"';i++;}else if(ch==='"'){quoted=!quoted;}else if(ch===","&&!quoted){row.push(value);value="";}else if((ch==="\\n"||ch==="\\r")&&!quoted){if(ch==="\\r"&&source[i+1]==="\\n")i++;row.push(value);if(row.some(x=>x.trim()))rows.push(row);row=[];value="";}else value+=ch;}
+    for(let i=0;i<source.length;i++){const ch=source[i];if(ch==='"'&&source[i+1]==='"'&&quoted){value+='"';i++;}else if(ch==='"'){quoted=!quoted;}else if(ch===","&&!quoted){row.push(value);value="";}else if((ch==="\n"||ch==="\r")&&!quoted){if(ch==="\r"&&source[i+1]==="\n")i++;row.push(value);if(row.some(x=>x.trim()))rows.push(row);row=[];value="";}else value+=ch;}
     row.push(value);if(row.some(x=>x.trim()))rows.push(row);return rows;
   };
   const importProductsCsv = async (file: File) => {
@@ -206,7 +206,7 @@ export default function AccountsPage() {
       await addNewProductsToInvoice(rows);
     }catch(error:any){setProductImportMessage(error?.message||"CSV import failed.");}finally{setBusy(false);}
   };
-  const csvTemplate="Product Name,Category,Purchase Quantity,Purchase Unit,Stock Unit,Units per Purchase Unit,Purchase Cost per Purchase Unit,Selling Price,Barcode\\nSample Product,Grocery,3,Box,Piece,12,240,25,SKU-001\\n";
+  const csvTemplate="Product Name,Category,Purchase Quantity,Purchase Unit,Stock Unit,Units per Purchase Unit,Purchase Cost per Purchase Unit,Selling Price,Barcode\nSample Product,Grocery,3,Box,Piece,12,240,25,SKU-001\n";
   const downloadCsvTemplate=()=>{const blob=new Blob([csvTemplate],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="retail-sync-purchase-template.csv";link.click();URL.revokeObjectURL(url);};
   const addLineToPurchase = () => {
     const product = products.find(p => p.id === selectedProduct);
