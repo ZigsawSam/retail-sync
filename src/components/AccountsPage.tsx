@@ -8,7 +8,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 type Supplier = { id: string; name: string; phone?: string | null; address?: string | null; gst_number?: string | null; owner_name?: string | null; email?: string | null; alternate_phone?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null; notes?: string | null };
 type Purchase = { id: string; supplier_id: string | null; supplier_name: string; invoice_number?: string | null; total_amount: number; paid_amount: number; due_amount: number; payment_method: string; timestamp: string; transporter_id?: string | null; transporter_name?: string | null; freight_amount?: number; freight_paid_amount?: number; freight_due_amount?: number; delivery_mode?: string | null };
 type Transporter = { id: string; name: string; phone?: string | null };
-type PurchaseLine = { productId: string; name: string; quantity: number; purchasePrice: number; purchaseQuantity?: number; purchaseUnit?: string; baseUnit?: string; unitsPerPurchaseUnit?: number; purchaseUnitCost?: number };
+type PurchaseLine = { productId: string; name: string; quantity: number; purchasePrice: number; purchaseQuantity?: number; purchaseUnit?: string; baseUnit?: string; unitsPerPurchaseUnit?: number; purchaseUnitCost?: number; newProduct?: { name:string; category:string; barcode:string; sellingPrice:number; purchaseUnit:string; baseUnit:string; unitsPerPurchaseUnit:number } };
 type DueCustomer = { id: string; name: string; phone: string; due: number };
 
 const inputClass = "w-full px-3 py-2.5 border-2 border-black bg-white text-sm font-bold text-black focus:outline-none";
@@ -149,36 +149,29 @@ export default function AccountsPage() {
 
   type NewProductRow = {name:string;category:string;cost:string;selling:string;barcode:string;quantity:string;purchaseUnit:string;baseUnit:string;conversion:string};
   const addNewProductsToInvoice = async (rows: NewProductRow[]) => {
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) throw new Error("Please sign in as the shop owner.");
+    // Product creation is deliberately deferred. These are draft invoice lines only;
+    // the purchase RPC creates catalogue records and adds stock in one transaction.
     const prepared = rows.map(row => {
       const quantity=Number(row.quantity), factor=Number(row.conversion), unitCost=Number(row.cost), selling=Number(row.selling);
       if (!row.name.trim()) throw new Error("Every product row needs a product name.");
-      if (!Number.isFinite(quantity)||quantity<=0||!Number.isInteger(factor)||factor<=0) throw new Error(`Enter a positive whole purchased quantity and conversion factor for ${row.name}.`);
+      if (!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(factor)||factor<=0) throw new Error(`Enter a positive quantity and conversion factor for ${row.name}.`);
       if (!row.purchaseUnit.trim()||!row.baseUnit.trim()) throw new Error(`Enter both units for ${row.name}.`);
       if (!Number.isFinite(unitCost)||unitCost<0||!Number.isFinite(selling)||selling<=0) throw new Error(`Enter valid purchase cost and selling price for ${row.name}.`);
       return {row,quantity,factor,unitCost,selling};
     });
-    const inserts=prepared.map(({row,factor,unitCost,selling})=>({
-      id:crypto.randomUUID(),userId:auth.user!.id,name:row.name.trim(),category:row.category.trim()||"Other",
-      purchasePrice:unitCost/factor,sellingPrice:selling,quantity:0,
-      barcode:row.barcode.trim()||"SKU-"+crypto.randomUUID(),
-      lowStockLimit:5,overstockLimit:40,
-      purchase_unit:row.purchaseUnit.trim(),base_unit:row.baseUnit.trim(),units_per_purchase_unit:factor
-    }));
-    // One insert prevents a failed bulk import from leaving a partially-created catalogue.
-    const {data,error}=await supabase.from("products").insert(inserts).select();
-    if(error) throw error;
-    if(!data||data.length!==prepared.length) throw new Error("The database did not confirm every product row.");
-    setPurchaseLines(old=>[...old,...data.map((product,i)=>({
-      productId:product.id,name:product.name,quantity:prepared[i].quantity*prepared[i].factor,
-      purchasePrice:prepared[i].unitCost/prepared[i].factor,
-      purchaseQuantity:prepared[i].quantity,purchaseUnit:prepared[i].row.purchaseUnit.trim(),
-      baseUnit:prepared[i].row.baseUnit.trim(),unitsPerPurchaseUnit:prepared[i].factor,
-      purchaseUnitCost:prepared[i].unitCost
+    setPurchaseLines(old=>[...old,...prepared.map(({row,quantity,factor,unitCost,selling})=>({
+      productId:"draft:"+crypto.randomUUID(),
+      name:row.name.trim(),
+      quantity:quantity*factor,
+      purchasePrice:unitCost/factor,
+      purchaseQuantity:quantity,
+      purchaseUnit:row.purchaseUnit.trim(),
+      baseUnit:row.baseUnit.trim(),
+      unitsPerPurchaseUnit:factor,
+      purchaseUnitCost:unitCost,
+      newProduct:{name:row.name.trim(),category:row.category.trim()||"Other",barcode:row.barcode.trim(),sellingPrice:selling,purchaseUnit:row.purchaseUnit.trim(),baseUnit:row.baseUnit.trim(),unitsPerPurchaseUnit:factor}
     }))]);
-    await refreshData();
-    setProductSource("existing");setSelectedProduct("");setShowProductCreator(false);
+    setProductSource("existing");setSelectedProduct("");setShowProductCreator(false);setMessage("");
   };
   const saveQuickProduct = async () => {
     setBusy(true);setProductImportMessage("");
@@ -243,7 +236,7 @@ export default function AccountsPage() {
       const { error } = await supabase.rpc("create_purchase_with_logistics", { p_purchase: {
         request_id: requestId,
         supplier_id: selectedSupplier || null, supplier_name: supplier?.name || "Unspecified supplier",
-        invoice_number: invoiceNumber || null, items: purchaseLines.map(line => ({productId:line.productId,quantity:line.quantity,purchasePrice:line.purchasePrice,purchaseQuantity:line.purchaseQuantity ?? line.quantity,purchaseUnit:line.purchaseUnit ?? "Piece",baseUnit:line.baseUnit ?? "Piece",unitsPerPurchaseUnit:line.unitsPerPurchaseUnit ?? 1,purchaseUnitCost:line.purchaseUnitCost ?? line.purchasePrice})),
+        invoice_number: invoiceNumber || null, items: purchaseLines.map(line => ({productId:line.newProduct ? null : line.productId, ...(line.newProduct ? {newProduct:line.newProduct} : {}),quantity:line.quantity,purchasePrice:line.purchasePrice,purchaseQuantity:line.purchaseQuantity ?? line.quantity,purchaseUnit:line.purchaseUnit ?? "Piece",baseUnit:line.baseUnit ?? "Piece",unitsPerPurchaseUnit:line.unitsPerPurchaseUnit ?? 1,purchaseUnitCost:line.purchaseUnitCost ?? line.purchasePrice})),
         paid_amount: paid, payment_method: purchaseMethod, notes: null,
         purchase_source: purchaseSource, delivery_mode: deliveryMode,
         transporter_id: selectedTransporter || null, freight_amount: freight,
@@ -320,7 +313,7 @@ export default function AccountsPage() {
                 <label className="block text-xs font-black uppercase">Product source</label>
         <div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>{setProductSource("existing");setSelectedProduct("");setPurchasePrice("");}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="existing"?"bg-[#FFC300]":"bg-white")}>Select existing product</button><button type="button" onClick={()=>{setProductSource("new");setShowProductCreator(true);}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="new"?"bg-[#FFC300]":"bg-white")}>Add new product</button></div>
         {productSource==="existing" && <select required className={inputClass} value={selectedProduct} onChange={e=>{setSelectedProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);setPurchasePrice("");setPurchaseUnit("");setSubUnit(p?.base_unit||"");setSubUnitQuantity("");}}><option value="">Choose from existing catalogue</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} — {p.purchase_unit||"Piece"} ({p.base_unit||"Piece"} stock), Current stock: {p.quantity}</option>)}</select>}
-        {productSource==="new" && <p className="text-xs font-bold bg-zinc-100 p-2">New products are added to the catalogue with zero stock. This purchase invoice adds the purchased quantity.</p>}
+        {productSource==="new" && <p className="text-xs font-bold bg-zinc-100 p-2">New products remain draft invoice items until you save the purchase. No catalogue or stock changes happen yet.</p>}
         {showProductCreator && <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-3"><div className="bg-[#FAF8F5] border-4 border-black shadow-[6px_6px_0_#000] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4">
           <div className="flex justify-between items-center"><h3 className="text-lg font-black uppercase">Add products to catalogue</h3><button type="button" onClick={()=>setShowProductCreator(false)} className="border-2 border-black bg-white px-3 py-1 font-black">✕</button></div>
           <div className="grid grid-cols-3 gap-2"><button type="button" onClick={()=>setNewProductMode("quick")} className={"border-2 border-black p-2 text-xs font-black uppercase "+(newProductMode==="quick"?"bg-[#FFC300]":"bg-white")}>Quick Add</button><button type="button" onClick={()=>setNewProductMode("bulk")} className={"border-2 border-black p-2 text-xs font-black uppercase "+(newProductMode==="bulk"?"bg-[#FFC300]":"bg-white")}>Bulk Add</button><button type="button" onClick={()=>setNewProductMode("csv")} className={"border-2 border-black p-2 text-xs font-black uppercase "+(newProductMode==="csv"?"bg-[#FFC300]":"bg-white")}>Import CSV</button></div>
@@ -333,7 +326,7 @@ export default function AccountsPage() {
         <button type="button" className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase" onClick={addLineToPurchase}>Add product to invoice</button>
         <div className="border-2 border-black p-3 space-y-2">
           <h3 className="text-xs font-black uppercase">Invoice items ({purchaseLines.length})</h3>
-          {purchaseLines.length===0 ? <p className="text-xs text-zinc-500">No products added yet.</p> : purchaseLines.map(line=><div key={line.productId} className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 text-xs"><span className="font-bold">{line.name} · {line.purchaseQuantity ?? line.quantity} {line.purchaseUnit ?? "units"} ({line.quantity} {line.baseUnit ?? "stock units"}) × {money(line.purchaseUnitCost ?? line.purchasePrice)}</span><span className="font-black">{money(line.quantity*line.purchasePrice)} <button type="button" onClick={()=>removePurchaseLine(line.productId)} className="ml-2 underline text-red-700">Remove</button></span></div>)}
+          {purchaseLines.length===0 ? <p className="text-xs text-zinc-500">No products added yet.</p> : purchaseLines.map(line=><div key={line.productId} className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 text-xs"><span className="font-bold">{line.name}{line.newProduct ? " · New catalogue entry" : ""} · {line.purchaseQuantity ?? line.quantity} {line.purchaseUnit ?? "units"} ({line.quantity} {line.baseUnit ?? "stock units"}) × {money(line.purchaseUnitCost ?? line.purchasePrice)}</span><span className="font-black">{money(line.quantity*line.purchasePrice)} <button type="button" onClick={()=>removePurchaseLine(line.productId)} className="ml-2 underline text-red-700">Remove</button></span></div>)}
           <div className="text-right font-black text-sm">Goods total: {money(purchaseLines.reduce((sum,line)=>sum+line.quantity*line.purchasePrice,0))}</div>
         </div>
         <div><label className="block text-xs font-black uppercase mb-1">Supplier invoice number</label><input className={inputClass} value={invoiceNumber} onChange={e=>setInvoiceNumber(e.target.value)} placeholder="Optional"/></div>
