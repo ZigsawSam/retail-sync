@@ -6,7 +6,8 @@ import { useApp } from "../context/AppContext";
 
 const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
 type Supplier = { id: string; name: string; phone?: string | null; address?: string | null; gst_number?: string | null; owner_name?: string | null; email?: string | null; alternate_phone?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null; notes?: string | null };
-type Purchase = { id: string; supplier_id: string | null; supplier_name: string; invoice_number?: string | null; total_amount: number; paid_amount: number; due_amount: number; payment_method: string; timestamp: string };
+type Purchase = { id: string; supplier_id: string | null; supplier_name: string; invoice_number?: string | null; total_amount: number; paid_amount: number; due_amount: number; payment_method: string; timestamp: string; transporter_id?: string | null; transporter_name?: string | null; freight_amount?: number; freight_paid_amount?: number; freight_due_amount?: number; delivery_mode?: string | null };
+type Transporter = { id: string; name: string; phone?: string | null };
 type DueCustomer = { id: string; name: string; phone: string; due: number };
 
 const inputClass = "w-full px-3 py-2.5 border-2 border-black bg-white text-sm font-bold text-black focus:outline-none";
@@ -26,6 +27,17 @@ export default function AccountsPage() {
   const [productImportMessage, setProductImportMessage] = useState("");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [transporters, setTransporters] = useState<Transporter[]>([]);
+  const [purchaseSource, setPurchaseSource] = useState("Direct");
+  const [deliveryMode, setDeliveryMode] = useState("Transporter");
+  const [selectedTransporter, setSelectedTransporter] = useState("");
+  const [freightAmount, setFreightAmount] = useState("0");
+  const [freightPaid, setFreightPaid] = useState("0");
+  const [freightMethod, setFreightMethod] = useState("Cash");
+  const [newTransporterName, setNewTransporterName] = useState("");
+  const [newTransporterPhone, setNewTransporterPhone] = useState("");
+  const [transporterPayId, setTransporterPayId] = useState("");
+  const [transporterPayAmount, setTransporterPayAmount] = useState("");
   const [dueCustomers, setDueCustomers] = useState<DueCustomer[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -63,14 +75,16 @@ export default function AccountsPage() {
     const { data: auth } = await supabase.auth.getUser();
     const user = auth.user;
     if (!user) { setMessage("Please sign in as the shop owner to use Accounts."); setLoading(false); return; }
-    const [supplierRes, purchaseRes] = await Promise.all([
+    const [supplierRes, purchaseRes, transporterRes] = await Promise.all([
       supabase.from("suppliers").select("*").eq("userId", user.id).order("name"),
       supabase.from("purchases").select("*").eq("userId", user.id).order("timestamp", { ascending: false }),
+      supabase.from("transporters").select("id,name,phone").eq("userId", user.id).order("name"),
     ]);
-    const err = supplierRes.error || purchaseRes.error;
+    const err = supplierRes.error || purchaseRes.error || transporterRes.error;
     if (err) setMessage(err.message);
     setSuppliers((supplierRes.data || []) as Supplier[]);
     setPurchases((purchaseRes.data || []) as Purchase[]);
+    setTransporters((transporterRes.data || []) as Transporter[]);
     setLoading(false);
   }, []);
 
@@ -137,16 +151,39 @@ export default function AccountsPage() {
     const product = products.find(p => p.id === selectedProduct);
     const qty = Number(quantity); const cost = Number(purchasePrice || product?.purchasePrice || 0);
     const total = qty * cost; const paid = Number(paidAmount || 0);
-    if (productSource !== "existing" || !product || !Number.isInteger(qty) || qty <= 0 || cost < 0 || paid < 0 || paid > total || (paid < total && !selectedSupplier)) { setMessage("Check the product, quantity and paid amount. A supplier is required when any amount remains due."); return; }
+    const freight = Number(freightAmount || 0); const freightPaidNow = Number(freightPaid || 0);
+    if (productSource !== "existing" || !product || !Number.isInteger(qty) || qty <= 0 || cost < 0 || paid < 0 || paid > total || (paid < total && !selectedSupplier) || freight < 0 || freightPaidNow < 0 || freightPaidNow > freight || (freight > 0 && !selectedTransporter)) { setMessage("Check product, supplier, freight and payment amounts. Select a transporter when freight is charged."); return; }
     void run(async () => {
       const supplier = suppliers.find(s => s.id === selectedSupplier);
-      const { error } = await supabase.rpc("create_purchase", { p_purchase: {
+      const { error } = await supabase.rpc("create_purchase_with_logistics", { p_purchase: {
         supplier_id: selectedSupplier || null, supplier_name: supplier?.name || "Unspecified supplier",
         invoice_number: invoiceNumber || null, items: [{ productId: product.id, quantity: qty, purchasePrice: cost }],
-        paid_amount: paid, payment_method: purchaseMethod, notes: null
+        paid_amount: paid, payment_method: purchaseMethod, notes: null,
+        purchase_source: purchaseSource, delivery_mode: deliveryMode,
+        transporter_id: selectedTransporter || null, freight_amount: freight,
+        freight_paid_amount: freightPaidNow, freight_payment_method: freightMethod
       }});
       if (error) throw error;
       setQuantity("1"); setPurchasePrice(""); setInvoiceNumber(""); setPaidAmount("");
+      setFreightAmount("0"); setFreightPaid("0"); setSelectedTransporter("");
+    });
+  };
+
+  const addTransporter = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      const { error } = await supabase.rpc("create_transporter", { p_name: newTransporterName, p_phone: newTransporterPhone || null, p_notes: null });
+      if (error) throw error;
+      setNewTransporterName(""); setNewTransporterPhone("");
+    });
+  };
+
+  const payTransporter = (e: React.FormEvent) => {
+    e.preventDefault();
+    void run(async () => {
+      const { error } = await supabase.rpc("record_transporter_payment", { p_transporter_id: transporterPayId, p_amount: Number(transporterPayAmount), p_method: paymentMethod, p_notes: null });
+      if (error) throw error;
+      setTransporterPayAmount("");
     });
   };
 
@@ -168,6 +205,10 @@ export default function AccountsPage() {
     });
   };
 
+  const transporterBalances = useMemo(() => transporters.map(t => ({
+    ...t, due: purchases.filter(p => p.transporter_id === t.id).reduce((sum,p) => sum + Number(p.freight_due_amount || 0),0)
+  })).filter(t => t.due > 0).sort((a,b) => b.due-a.due), [transporters,purchases]);
+  const totalFreightDue = transporterBalances.reduce((sum,t)=>sum+t.due,0);
   const totalPayable = supplierBalances.reduce((s,x)=>s+x.due,0);
   const totalReceivable = dueCustomers.reduce((s,x)=>s+x.due,0);
 
@@ -177,14 +218,17 @@ export default function AccountsPage() {
       <button className={buttonClass} onClick={() => void load()} disabled={loading}>Refresh</button>
     </header>
     {message && <div className="p-3 border-2 border-black bg-amber-100 text-sm font-bold">{message}</div>}
-    <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
       <div className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000]"><p className="text-[10px] font-black uppercase text-zinc-500">Supplier outstanding</p><p className="text-2xl font-black mt-2">{money(totalPayable)}</p></div>
       <div className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000]"><p className="text-[10px] font-black uppercase text-zinc-500">Customer outstanding</p><p className="text-2xl font-black mt-2">{money(totalReceivable)}</p></div>
       <div className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000]"><p className="text-[10px] font-black uppercase text-zinc-500">Recorded purchases</p><p className="text-2xl font-black mt-2">{money(purchases.reduce((s,p)=>s+Number(p.total_amount||0),0))}</p></div>
+      <div className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000]"><p className="text-[10px] font-black uppercase text-zinc-500">Transporter outstanding</p><p className="text-2xl font-black mt-2">{money(totalFreightDue)}</p></div>
     </section>
     <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
       <form onSubmit={addPurchase} className="bg-white border-3 border-black p-5 shadow-[4px_4px_0_#000] space-y-3">
         <h2 className="font-black uppercase text-lg border-b-2 border-black pb-2">Record stock purchase</h2>
+        <label className="block text-xs font-black uppercase">Purchase source</label>
+        <select className={inputClass} value={purchaseSource} onChange={e=>setPurchaseSource(e.target.value)}><option value="Direct">Direct purchase</option><option value="Agent-assisted">Through agent</option></select>
         <label className="block text-xs font-black uppercase">Supplier</label>
         <select className={inputClass} value={selectedSupplier} onChange={e=>setSelectedSupplier(e.target.value)}><option value="">Choose supplier (optional)</option>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
                 <label className="block text-xs font-black uppercase">Product source</label>
@@ -201,9 +245,41 @@ export default function AccountsPage() {
         </div></div>}
         <div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-black uppercase mb-1">Quantity</label><input className={inputClass} type="number" min="1" step="1" required value={quantity} onChange={e=>setQuantity(e.target.value)}/></div><div><label className="block text-xs font-black uppercase mb-1">Cost per unit</label><input className={inputClass} type="number" min="0" step="0.01" required value={purchasePrice} onChange={e=>setPurchasePrice(e.target.value)}/></div></div>
         <div><label className="block text-xs font-black uppercase mb-1">Supplier invoice number</label><input className={inputClass} value={invoiceNumber} onChange={e=>setInvoiceNumber(e.target.value)} placeholder="Optional"/></div>
+        <div className="border-2 border-black p-3 space-y-3">
+          <h3 className="font-black uppercase text-sm">Delivery & freight (separate from goods bill)</h3>
+          <label className="block text-xs font-black uppercase">Delivery mode</label>
+          <select className={inputClass} value={deliveryMode} onChange={e=>setDeliveryMode(e.target.value)}><option>Self Pickup</option><option>Supplier Delivery</option><option>Transporter</option><option>Courier</option><option>Other</option></select>
+          <label className="block text-xs font-black uppercase">Transporter</label>
+          <select className={inputClass} value={selectedTransporter} onChange={e=>setSelectedTransporter(e.target.value)}><option value="">Select transporter (if freight is charged)</option>{transporters.map(t=><option key={t.id} value={t.id}>{t.name}{t.phone ? " · "+t.phone : ""}</option>)}</select>
+          <div className="grid grid-cols-2 gap-3">
+            <div><label className="block text-xs font-black uppercase mb-1">Separate freight cost</label><input className={inputClass} type="number" min="0" step="0.01" value={freightAmount} onChange={e=>setFreightAmount(e.target.value)}/></div>
+            <div><label className="block text-xs font-black uppercase mb-1">Freight paid now</label><input className={inputClass} type="number" min="0" step="0.01" value={freightPaid} onChange={e=>setFreightPaid(e.target.value)}/></div>
+          </div>
+          <label className="block text-xs font-black uppercase">Freight payment method</label>
+          <select className={inputClass} value={freightMethod} onChange={e=>setFreightMethod(e.target.value)}><option>Cash</option><option>UPI</option><option>Bank</option><option>Card</option><option>Cheque</option></select>
+          <p className="text-xs font-bold">Freight outstanding: {money(Math.max(0,Number(freightAmount||0)-Number(freightPaid||0)))}</p>
+        </div>
         <div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-black uppercase mb-1">Paid now</label><input className={inputClass} type="number" min="0" step="0.01" value={paidAmount} onChange={e=>setPaidAmount(e.target.value)} placeholder="0.00"/></div><div><label className="block text-xs font-black uppercase mb-1">Payment method</label><select className={inputClass} value={purchaseMethod} onChange={e=>setPurchaseMethod(e.target.value)}><option>Cash</option><option>UPI</option><option>Bank</option><option>Card</option><option>Cheque</option></select></div></div>
-        <p className="text-xs font-bold bg-zinc-100 p-2">Purchase total: {money(Number(quantity||0)*Number(purchasePrice||0))} · Due: {money(Math.max(0,Number(quantity||0)*Number(purchasePrice||0)-Number(paidAmount||0)))}</p>
+        <p className="text-xs font-bold bg-zinc-100 p-2">Goods total: {money(Number(quantity||0)*Number(purchasePrice||0))} · Supplier due: {money(Math.max(0,Number(quantity||0)*Number(purchasePrice||0)-Number(paidAmount||0)))} · Freight: {money(Number(freightAmount||0))}</p>
         <button className={buttonClass} disabled={busy || loading}>Save purchase & add stock</button>
+      </form>
+    </section>
+    <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <form onSubmit={addTransporter} className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
+        <h2 className="font-black uppercase text-lg">Transporters</h2>
+        <input required className={inputClass} placeholder="Transporter / company name" value={newTransporterName} onChange={e=>setNewTransporterName(e.target.value)}/>
+        <input className={inputClass} placeholder="Phone (optional)" value={newTransporterPhone} onChange={e=>setNewTransporterPhone(e.target.value)}/>
+        <button className={buttonClass} disabled={busy}>Add transporter</button>
+        <div className="border-t-2 border-black pt-3"><h3 className="font-black uppercase text-sm mb-2">Outstanding freight</h3>
+          {transporterBalances.length===0 ? <p className="text-xs text-zinc-500">No transporter dues.</p> : transporterBalances.map(t=><div key={t.id} className="flex justify-between text-sm border-b py-2"><span className="font-bold">{t.name}</span><strong>{money(t.due)}</strong></div>)}
+        </div>
+      </form>
+      <form onSubmit={payTransporter} className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000] space-y-3">
+        <h2 className="font-black uppercase text-lg">Pay transporter</h2>
+        <select required className={inputClass} value={transporterPayId} onChange={e=>setTransporterPayId(e.target.value)}><option value="">Select transporter</option>{transporterBalances.map(t=><option key={t.id} value={t.id}>{t.name} — Due {money(t.due)}</option>)}</select>
+        <input required type="number" min="0.01" step="0.01" className={inputClass} placeholder="Payment amount" value={transporterPayAmount} onChange={e=>setTransporterPayAmount(e.target.value)}/>
+        <select className={inputClass} value={paymentMethod} onChange={e=>setPaymentMethod(e.target.value)}><option>Cash</option><option>UPI</option><option>Bank</option><option>Card</option><option>Cheque</option></select>
+        <button className={buttonClass} disabled={busy || !transporterPayId}>Record transporter payment</button>
       </form>
     </section>
     <section className="bg-white border-3 border-black p-5 shadow-[3px_3px_0_#000]">
