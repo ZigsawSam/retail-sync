@@ -8,6 +8,7 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env
 type Supplier = { id: string; name: string; phone?: string | null; address?: string | null; gst_number?: string | null; owner_name?: string | null; email?: string | null; alternate_phone?: string | null; city?: string | null; state?: string | null; postal_code?: string | null; country?: string | null; notes?: string | null };
 type Purchase = { id: string; supplier_id: string | null; supplier_name: string; invoice_number?: string | null; total_amount: number; paid_amount: number; due_amount: number; payment_method: string; timestamp: string; transporter_id?: string | null; transporter_name?: string | null; freight_amount?: number; freight_paid_amount?: number; freight_due_amount?: number; delivery_mode?: string | null };
 type Transporter = { id: string; name: string; phone?: string | null };
+type PurchaseLine = { productId: string; name: string; quantity: number; purchasePrice: number };
 type DueCustomer = { id: string; name: string; phone: string; due: number };
 
 const inputClass = "w-full px-3 py-2.5 border-2 border-black bg-white text-sm font-bold text-black focus:outline-none";
@@ -59,6 +60,7 @@ export default function AccountsPage() {
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [purchasePrice, setPurchasePrice] = useState("");
+  const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([]);
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
   const [purchaseMethod, setPurchaseMethod] = useState("Cash");
@@ -146,25 +148,43 @@ export default function AccountsPage() {
   const saveQuickProduct = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setProductImportMessage(""); try { const product = await createCatalogProduct({name:newProductName,category:newProductCategory,cost:newProductCost,selling:newProductSelling,barcode:newProductBarcode}); await refreshData(); setSelectedProduct(product.id); setProductSource("existing"); setShowProductCreator(false); setPurchasePrice(String(product.purchasePrice)); setNewProductName(""); setNewProductCost(""); setNewProductSelling(""); setNewProductBarcode(""); } catch(error:any) { setProductImportMessage(error?.message || "Unable to create product."); } finally { setBusy(false); } };
   const saveBulkProducts = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setProductImportMessage(""); try { const rows=bulkProductRows.filter(row=>row.name.trim()); if(!rows.length) throw new Error("Add at least one product row."); const created=[]; for(const row of rows) created.push(await createCatalogProduct(row)); await refreshData(); setSelectedProduct(created[0].id); setProductSource("existing"); setPurchasePrice(String(created[0].purchasePrice)); setShowProductCreator(false); } catch(error:any) { setProductImportMessage(error?.message || "Bulk product creation failed."); } finally { setBusy(false); } };
   const importProductsCsv = async (file: File) => { setBusy(true); setProductImportMessage(""); try { const raw=await file.text(); const lines=raw.split(/\r?\n/).filter(Boolean); const headers=lines.shift()?.split(",").map(x=>x.trim().toLowerCase()) || []; const idx=(names:string[])=>headers.findIndex(h=>names.includes(h)); const n=idx(["name","product name"]), cat=idx(["category"]), cost=idx(["purchaseprice","purchase_price","cost"]), selling=idx(["sellingprice","selling_price","mrp"]), barcode=idx(["barcode","sku"]); if(n<0||selling<0) throw new Error("CSV needs name and sellingPrice columns."); const auth=await supabase.auth.getUser(); if(!auth.data.user) throw new Error("Please sign in."); const rows=lines.map(line=>line.split(",")).filter(v=>v[n]?.trim()).map(v=>({userId:auth.data.user!.id,name:v[n].trim(),category:cat>=0?(v[cat]||"Other"):"Other",purchasePrice:cost>=0?Number(v[cost])||0:0,sellingPrice:Number(v[selling])||0,quantity:0,barcode:barcode>=0?(v[barcode]||"SKU-"+Date.now()):"SKU-"+Date.now(),lowStockLimit:5,overstockLimit:40})); if(!rows.length) throw new Error("No valid product rows found."); const {data,error}=await supabase.from("products").insert(rows).select(); if(error) throw error; await refreshData(); if(data?.[0]){setSelectedProduct(data[0].id);setProductSource("existing");setPurchasePrice(String(data[0].purchasePrice));} setShowProductCreator(false); } catch(error:any){setProductImportMessage(error?.message||"CSV import failed.");} finally{setBusy(false);} };
-  const addPurchase = (e: React.FormEvent) => {
-    e.preventDefault();
+  const addLineToPurchase = () => {
     const product = products.find(p => p.id === selectedProduct);
     const qty = Number(quantity); const cost = Number(purchasePrice || product?.purchasePrice || 0);
-    const total = qty * cost; const paid = Number(paidAmount || 0);
+    if (productSource !== "existing" || !product || !Number.isInteger(qty) || qty <= 0 || !Number.isFinite(cost) || cost < 0) {
+      setMessage("Select a product and enter a valid quantity and purchase rate."); return;
+    }
+    setPurchaseLines(old => {
+      const existing = old.find(line => line.productId === product.id);
+      return existing
+        ? old.map(line => line.productId === product.id ? { ...line, quantity: line.quantity + qty, purchasePrice: cost } : line)
+        : [...old, { productId: product.id, name: product.name, quantity: qty, purchasePrice: cost }];
+    });
+    setSelectedProduct(""); setQuantity("1"); setPurchasePrice(""); setProductSource("existing"); setMessage("");
+  };
+
+  const removePurchaseLine = (productId: string) => setPurchaseLines(old => old.filter(line => line.productId !== productId));
+
+  const addPurchase = (e: React.FormEvent) => {
+    e.preventDefault();
+    const goodsTotal = purchaseLines.reduce((sum,line)=>sum+line.quantity*line.purchasePrice,0);
+    const paid = Number(paidAmount || 0);
     const freight = Number(freightAmount || 0); const freightPaidNow = Number(freightPaid || 0);
-    if (productSource !== "existing" || !product || !Number.isInteger(qty) || qty <= 0 || cost < 0 || paid < 0 || paid > total || (paid < total && !selectedSupplier) || freight < 0 || freightPaidNow < 0 || freightPaidNow > freight || (freight > 0 && !selectedTransporter)) { setMessage("Check product, supplier, freight and payment amounts. Select a transporter when freight is charged."); return; }
+    if (purchaseLines.length === 0 || paid < 0 || paid > goodsTotal || (paid < goodsTotal && !selectedSupplier) || freight < 0 || freightPaidNow < 0 || freightPaidNow > freight || (freight > 0 && !selectedTransporter)) {
+      setMessage("Add at least one product and check supplier, freight and payment amounts. Select a supplier when goods remain unpaid."); return;
+    }
     void run(async () => {
       const supplier = suppliers.find(s => s.id === selectedSupplier);
       const { error } = await supabase.rpc("create_purchase_with_logistics", { p_purchase: {
         supplier_id: selectedSupplier || null, supplier_name: supplier?.name || "Unspecified supplier",
-        invoice_number: invoiceNumber || null, items: [{ productId: product.id, quantity: qty, purchasePrice: cost }],
+        invoice_number: invoiceNumber || null, items: purchaseLines.map(({productId,quantity,purchasePrice}) => ({productId,quantity,purchasePrice})),
         paid_amount: paid, payment_method: purchaseMethod, notes: null,
         purchase_source: purchaseSource, delivery_mode: deliveryMode,
         transporter_id: selectedTransporter || null, freight_amount: freight,
         freight_paid_amount: freightPaidNow, freight_payment_method: freightMethod
       }});
       if (error) throw error;
-      setQuantity("1"); setPurchasePrice(""); setInvoiceNumber(""); setPaidAmount("");
+      setPurchaseLines([]); setQuantity("1"); setPurchasePrice(""); setInvoiceNumber(""); setPaidAmount("");
       setFreightAmount("0"); setFreightPaid("0"); setSelectedTransporter("");
     });
   };
@@ -244,6 +264,12 @@ export default function AccountsPage() {
           {productImportMessage && <p className="p-3 border-2 border-black bg-amber-100 text-xs font-bold">{productImportMessage}</p>}
         </div></div>}
         <div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-black uppercase mb-1">Quantity</label><input className={inputClass} type="number" min="1" step="1" required value={quantity} onChange={e=>setQuantity(e.target.value)}/></div><div><label className="block text-xs font-black uppercase mb-1">Cost per unit</label><input className={inputClass} type="number" min="0" step="0.01" required value={purchasePrice} onChange={e=>setPurchasePrice(e.target.value)}/></div></div>
+        <button type="button" className="border-2 border-black bg-white px-3 py-2 text-xs font-black uppercase" onClick={addLineToPurchase}>Add product to invoice</button>
+        <div className="border-2 border-black p-3 space-y-2">
+          <h3 className="text-xs font-black uppercase">Invoice items ({purchaseLines.length})</h3>
+          {purchaseLines.length===0 ? <p className="text-xs text-zinc-500">No products added yet.</p> : purchaseLines.map(line=><div key={line.productId} className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-200 pb-2 text-xs"><span className="font-bold">{line.name} · {line.quantity} × {money(line.purchasePrice)}</span><span className="font-black">{money(line.quantity*line.purchasePrice)} <button type="button" onClick={()=>removePurchaseLine(line.productId)} className="ml-2 underline text-red-700">Remove</button></span></div>)}
+          <div className="text-right font-black text-sm">Goods total: {money(purchaseLines.reduce((sum,line)=>sum+line.quantity*line.purchasePrice,0))}</div>
+        </div>
         <div><label className="block text-xs font-black uppercase mb-1">Supplier invoice number</label><input className={inputClass} value={invoiceNumber} onChange={e=>setInvoiceNumber(e.target.value)} placeholder="Optional"/></div>
         <div className="border-2 border-black p-3 space-y-3">
           <h3 className="font-black uppercase text-sm">Delivery & freight (separate from goods bill)</h3>
@@ -260,7 +286,7 @@ export default function AccountsPage() {
           <p className="text-xs font-bold">Freight outstanding: {money(Math.max(0,Number(freightAmount||0)-Number(freightPaid||0)))}</p>
         </div>
         <div className="grid grid-cols-2 gap-3"><div><label className="block text-xs font-black uppercase mb-1">Paid now</label><input className={inputClass} type="number" min="0" step="0.01" value={paidAmount} onChange={e=>setPaidAmount(e.target.value)} placeholder="0.00"/></div><div><label className="block text-xs font-black uppercase mb-1">Payment method</label><select className={inputClass} value={purchaseMethod} onChange={e=>setPurchaseMethod(e.target.value)}><option>Cash</option><option>UPI</option><option>Bank</option><option>Card</option><option>Cheque</option></select></div></div>
-        <p className="text-xs font-bold bg-zinc-100 p-2">Goods total: {money(Number(quantity||0)*Number(purchasePrice||0))} · Supplier due: {money(Math.max(0,Number(quantity||0)*Number(purchasePrice||0)-Number(paidAmount||0)))} · Freight: {money(Number(freightAmount||0))}</p>
+        <p className="text-xs font-bold bg-zinc-100 p-2">Goods total: {money(purchaseLines.reduce((sum,line)=>sum+line.quantity*line.purchasePrice,0))} · Supplier due: {money(Math.max(0,purchaseLines.reduce((sum,line)=>sum+line.quantity*line.purchasePrice,0)-Number(paidAmount||0)))} · Freight: {money(Number(freightAmount||0))}</p>
         <button className={buttonClass} disabled={busy || loading}>Save purchase & add stock</button>
       </form>
     </section>
