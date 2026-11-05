@@ -449,7 +449,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           shopCategory: settingsData.shop_category || settingsData.shopCategory || "",
           shopSubcategory: settingsData.shop_subcategory || settingsData.shopSubcategory || "",
           productCategories: settingsData.product_categories || settingsData.productCategories || [],
-          unitConversions: settingsData.unit_conversions || [],
           expenseCategories: settingsData.expense_categories || settingsData.expenseCategories || [],
           taxRate: settingsData.taxRate ?? 5,
           currency: settingsData.currency || "Rs",
@@ -794,7 +793,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (updates.shopCategory !== undefined) dbUpdates.shop_category = updates.shopCategory;
     if (updates.shopSubcategory !== undefined) dbUpdates.shop_subcategory = updates.shopSubcategory;
     if (updates.productCategories !== undefined) dbUpdates.product_categories = updates.productCategories;
-    if (updates.unitConversions !== undefined) dbUpdates.unit_conversions = updates.unitConversions;
     if (updates.expenseCategories !== undefined) dbUpdates.expense_categories = updates.expenseCategories;
     if (updates.taxRate !== undefined) dbUpdates.taxRate = updates.taxRate;
     if (updates.currency !== undefined) dbUpdates.currency = updates.currency;
