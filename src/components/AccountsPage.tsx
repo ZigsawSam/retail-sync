@@ -61,6 +61,8 @@ export default function AccountsPage() {
   const [quantity, setQuantity] = useState("1");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([]);
+  // Reuse the same request ID if a submission is retried after an uncertain network result.
+  const [purchaseRequestId, setPurchaseRequestId] = useState("");
   const [invoiceNumber, setInvoiceNumber] = useState("");
   const [paidAmount, setPaidAmount] = useState("");
   const [purchaseMethod, setPurchaseMethod] = useState("Cash");
@@ -173,9 +175,12 @@ export default function AccountsPage() {
     if (purchaseLines.length === 0 || paid < 0 || paid > goodsTotal || (paid < goodsTotal && !selectedSupplier) || freight < 0 || freightPaidNow < 0 || freightPaidNow > freight || (freight > 0 && !selectedTransporter)) {
       setMessage("Add at least one product and check supplier, freight and payment amounts. Select a supplier when goods remain unpaid."); return;
     }
+    const requestId = purchaseRequestId || crypto.randomUUID();
+    setPurchaseRequestId(requestId);
     void run(async () => {
       const supplier = suppliers.find(s => s.id === selectedSupplier);
       const { error } = await supabase.rpc("create_purchase_with_logistics", { p_purchase: {
+        request_id: requestId,
         supplier_id: selectedSupplier || null, supplier_name: supplier?.name || "Unspecified supplier",
         invoice_number: invoiceNumber || null, items: purchaseLines.map(({productId,quantity,purchasePrice}) => ({productId,quantity,purchasePrice})),
         paid_amount: paid, payment_method: purchaseMethod, notes: null,
@@ -185,7 +190,7 @@ export default function AccountsPage() {
       }});
       if (error) throw error;
       setPurchaseLines([]); setQuantity("1"); setPurchasePrice(""); setInvoiceNumber(""); setPaidAmount("");
-      setFreightAmount("0"); setFreightPaid("0"); setSelectedTransporter("");
+      setFreightAmount("0"); setFreightPaid("0"); setSelectedTransporter(""); setPurchaseRequestId("");
     });
   };
 
