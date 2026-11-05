@@ -160,7 +160,7 @@ export default function AccountsPage() {
       return {row,quantity,factor,unitCost,selling};
     });
     const inserts=prepared.map(({row,factor,unitCost,selling})=>({
-      userId:auth.user!.id,name:row.name.trim(),category:row.category.trim()||"Other",
+      id:crypto.randomUUID(),userId:auth.user!.id,name:row.name.trim(),category:row.category.trim()||"Other",
       purchasePrice:unitCost/factor,sellingPrice:selling,quantity:0,
       barcode:row.barcode.trim()||"SKU-"+crypto.randomUUID(),
       lowStockLimit:5,overstockLimit:40,
