@@ -25,9 +25,9 @@ export default function AccountsPage() {
   const [newProductSelling, setNewProductSelling] = useState("");
   const [newProductBarcode, setNewProductBarcode] = useState("");
   const [newProductQuantity, setNewProductQuantity] = useState("1");
-  const [newProductPurchaseUnit, setNewProductPurchaseUnit] = useState("Box");
-  const [newProductBaseUnit, setNewProductBaseUnit] = useState("Piece");
-  const [newProductConversion, setNewProductConversion] = useState("1");
+  const [newProductPurchaseUnit, setNewProductPurchaseUnit] = useState("");
+  const [newProductBaseUnit, setNewProductBaseUnit] = useState("");
+  const [newProductConversion, setNewProductConversion] = useState("");
   const [bulkProductRows, setBulkProductRows] = useState([{name:"",category:"",cost:"",selling:"",barcode:"",quantity:"1",purchaseUnit:"Box",baseUnit:"Piece",conversion:"1"}]);
   const [productImportMessage, setProductImportMessage] = useState("");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -62,10 +62,10 @@ export default function AccountsPage() {
   const [editingSupplier, setEditingSupplier] = useState<string | null>(null);
   const [selectedSupplier, setSelectedSupplier] = useState("");
   const [selectedProduct, setSelectedProduct] = useState("");
-  const [quantity, setQuantity] = useState("1");
-  const [purchaseUnit, setPurchaseUnit] = useState("Box");
-  const [subUnitQuantity, setSubUnitQuantity] = useState("1");
-  const [subUnit, setSubUnit] = useState("Piece");
+  const [quantity, setQuantity] = useState("");
+  const [purchaseUnit, setPurchaseUnit] = useState("");
+  const [subUnitQuantity, setSubUnitQuantity] = useState("");
+  const [subUnit, setSubUnit] = useState("");
   const [purchasePrice, setPurchasePrice] = useState("");
   const [purchaseLines, setPurchaseLines] = useState<PurchaseLine[]>([]);
   // Reuse the same request ID if a submission is retried after an uncertain network result.
@@ -184,7 +184,7 @@ export default function AccountsPage() {
     setBusy(true);setProductImportMessage("");
     try {
       await addNewProductsToInvoice([{name:newProductName,category:newProductCategory,cost:newProductCost,selling:newProductSelling,barcode:newProductBarcode,quantity:newProductQuantity,purchaseUnit:newProductPurchaseUnit,baseUnit:newProductBaseUnit,conversion:newProductConversion}]);
-      setNewProductName("");setNewProductCost("");setNewProductSelling("");setNewProductBarcode("");setNewProductQuantity("1");
+      setNewProductName("");setNewProductCost("");setNewProductSelling("");setNewProductBarcode("");setNewProductQuantity("");
     } catch(error:any){setProductImportMessage(error?.message||"Unable to create product.");}finally{setBusy(false);}
   };
   const saveBulkProducts = async () => {
@@ -213,7 +213,7 @@ export default function AccountsPage() {
   const downloadCsvTemplate=()=>{const blob=new Blob([csvTemplate],{type:"text/csv;charset=utf-8;"});const url=URL.createObjectURL(blob);const link=document.createElement("a");link.href=url;link.download="retail-sync-purchase-template.csv";link.click();URL.revokeObjectURL(url);};
   const addLineToPurchase = () => {
     const product = products.find(p => p.id === selectedProduct);
-    const qty = Number(quantity); const cost = Number(purchasePrice || product?.purchasePrice || 0); const factor = Number(product?.units_per_purchase_unit || 1);
+    const qty = Number(quantity); const cost = Number(purchasePrice || 0); const factor = Number(subUnitQuantity);
     if (productSource !== "existing" || !product || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(factor) || factor <= 0 || !Number.isFinite(cost) || cost < 0 || !purchaseUnit || !subUnit || (product.base_unit && product.base_unit !== subUnit)) {
       setMessage("Select a product and enter a valid quantity and purchase rate."); return;
     }
@@ -223,7 +223,7 @@ export default function AccountsPage() {
         ? old.map(line => line.productId === product.id ? { ...line, quantity: line.quantity + qty*factor, purchasePrice: cost/factor, purchaseQuantity: (line.purchaseQuantity || 0) + qty, purchaseUnit: product.purchase_unit || "Piece", baseUnit: product.base_unit || "Piece", unitsPerPurchaseUnit: factor, purchaseUnitCost: cost } : line)
         : [...old, { productId: product.id, name: product.name, quantity: qty*factor, purchasePrice: cost/factor, purchaseQuantity: qty, purchaseUnit: product.purchase_unit || "Piece", baseUnit: product.base_unit || "Piece", unitsPerPurchaseUnit: factor, purchaseUnitCost: cost }];
     });
-    setSelectedProduct(""); setQuantity("1"); setSubUnitQuantity("1"); setPurchasePrice(""); setProductSource("existing"); setMessage("");
+    setSelectedProduct(""); setQuantity(""); setSubUnitQuantity(""); setPurchasePrice(""); setProductSource("existing"); setMessage("");
   };
 
   const removePurchaseLine = (productId: string) => setPurchaseLines(old => old.filter(line => line.productId !== productId));
@@ -319,7 +319,7 @@ export default function AccountsPage() {
         <select className={inputClass} value={selectedSupplier} onChange={e=>setSelectedSupplier(e.target.value)}><option value="">Choose supplier (optional)</option>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
                 <label className="block text-xs font-black uppercase">Product source</label>
         <div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>{setProductSource("existing");setSelectedProduct("");setPurchasePrice("");}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="existing"?"bg-[#FFC300]":"bg-white")}>Select existing product</button><button type="button" onClick={()=>{setProductSource("new");setShowProductCreator(true);}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="new"?"bg-[#FFC300]":"bg-white")}>Add new product</button></div>
-        {productSource==="existing" && <select required className={inputClass} value={selectedProduct} onChange={e=>{setSelectedProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);setPurchasePrice(p?String(p.purchasePrice*Number(p.units_per_purchase_unit||1)):"");setSubUnit(p?.base_unit||"Piece");setSubUnitQuantity(String(p?.units_per_purchase_unit||1));}}><option value="">Choose from existing catalogue</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} — {p.purchase_unit||"Piece"} ({p.base_unit||"Piece"} stock), Current stock: {p.quantity}</option>)}</select>}
+        {productSource==="existing" && <select required className={inputClass} value={selectedProduct} onChange={e=>{setSelectedProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);setPurchasePrice(p?String(p.purchasePrice*Number(p.units_per_purchase_unit||1)):"");setSubUnit(p?.base_unit||"");setSubUnitQuantity("");}}><option value="">Choose from existing catalogue</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} — {p.purchase_unit||"Piece"} ({p.base_unit||"Piece"} stock), Current stock: {p.quantity}</option>)}</select>}
         {productSource==="new" && <p className="text-xs font-bold bg-zinc-100 p-2">New products are added to the catalogue with zero stock. This purchase invoice adds the purchased quantity.</p>}
         {showProductCreator && <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-3"><div className="bg-[#FAF8F5] border-4 border-black shadow-[6px_6px_0_#000] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4">
           <div className="flex justify-between items-center"><h3 className="text-lg font-black uppercase">Add products to catalogue</h3><button type="button" onClick={()=>setShowProductCreator(false)} className="border-2 border-black bg-white px-3 py-1 font-black">✕</button></div>
