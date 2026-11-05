@@ -220,8 +220,8 @@ export default function AccountsPage() {
     setPurchaseLines(old => {
       const existing = old.find(line => line.productId === product.id);
       return existing
-        ? old.map(line => line.productId === product.id ? { ...line, quantity: line.quantity + qty*factor, purchasePrice: cost/factor, purchaseQuantity: (line.purchaseQuantity || 0) + qty, purchaseUnit: product.purchase_unit || "Piece", baseUnit: product.base_unit || "Piece", unitsPerPurchaseUnit: factor, purchaseUnitCost: cost } : line)
-        : [...old, { productId: product.id, name: product.name, quantity: qty*factor, purchasePrice: cost/factor, purchaseQuantity: qty, purchaseUnit: product.purchase_unit || "Piece", baseUnit: product.base_unit || "Piece", unitsPerPurchaseUnit: factor, purchaseUnitCost: cost }];
+        ? old.map(line => line.productId === product.id ? { ...line, quantity: line.quantity + qty*factor, purchasePrice: cost/factor, purchaseQuantity: (line.purchaseQuantity || 0) + qty, purchaseUnit, baseUnit: product.base_unit || subUnit, unitsPerPurchaseUnit: factor, purchaseUnitCost: cost } : line)
+        : [...old, { productId: product.id, name: product.name, quantity: qty*factor, purchasePrice: cost/factor, purchaseQuantity: qty, purchaseUnit, baseUnit: product.base_unit || subUnit, unitsPerPurchaseUnit: factor, purchaseUnitCost: cost }];
     });
     setSelectedProduct(""); setQuantity(""); setSubUnitQuantity(""); setPurchasePrice(""); setProductSource("existing"); setMessage("");
   };
