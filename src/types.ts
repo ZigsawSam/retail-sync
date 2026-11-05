@@ -10,6 +10,9 @@ export interface Product {
   barcode: string; // SKU / Barcode
   lowStockLimit: number;
   overstockLimit: number;
+  purchase_unit?: string;
+  base_unit?: string;
+  units_per_purchase_unit?: number;
 }
 
 export interface Customer {
