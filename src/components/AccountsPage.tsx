@@ -28,7 +28,7 @@ export default function AccountsPage() {
   const [newProductPurchaseUnit, setNewProductPurchaseUnit] = useState("");
   const [newProductBaseUnit, setNewProductBaseUnit] = useState("");
   const [newProductConversion, setNewProductConversion] = useState("");
-  const [bulkProductRows, setBulkProductRows] = useState([{name:"",category:"",cost:"",selling:"",barcode:"",quantity:"1",purchaseUnit:"Box",baseUnit:"Piece",conversion:"1"}]);
+  const [bulkProductRows, setBulkProductRows] = useState([{name:"",category:"",cost:"",selling:"",barcode:"",quantity:"",purchaseUnit:"",baseUnit:"",conversion:""}]);
   const [productImportMessage, setProductImportMessage] = useState("");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -154,7 +154,7 @@ export default function AccountsPage() {
     const prepared = rows.map(row => {
       const quantity=Number(row.quantity), factor=Number(row.conversion), unitCost=Number(row.cost), selling=Number(row.selling);
       if (!row.name.trim()) throw new Error("Every product row needs a product name.");
-      if (!Number.isFinite(quantity)||quantity<=0||!Number.isFinite(factor)||factor<=0) throw new Error(`Enter a positive whole purchased quantity and conversion factor for ${row.name}.`);
+      if (!Number.isFinite(quantity)||quantity<=0||!Number.isInteger(factor)||factor<=0) throw new Error(`Enter a positive whole purchased quantity and conversion factor for ${row.name}.`);
       if (!row.purchaseUnit.trim()||!row.baseUnit.trim()) throw new Error(`Enter both units for ${row.name}.`);
       if (!Number.isFinite(unitCost)||unitCost<0||!Number.isFinite(selling)||selling<=0) throw new Error(`Enter valid purchase cost and selling price for ${row.name}.`);
       return {row,quantity,factor,unitCost,selling};
@@ -319,7 +319,7 @@ export default function AccountsPage() {
         <select className={inputClass} value={selectedSupplier} onChange={e=>setSelectedSupplier(e.target.value)}><option value="">Choose supplier (optional)</option>{suppliers.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}</select>
                 <label className="block text-xs font-black uppercase">Product source</label>
         <div className="grid grid-cols-2 gap-2"><button type="button" onClick={()=>{setProductSource("existing");setSelectedProduct("");setPurchasePrice("");}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="existing"?"bg-[#FFC300]":"bg-white")}>Select existing product</button><button type="button" onClick={()=>{setProductSource("new");setShowProductCreator(true);}} className={"p-3 border-2 border-black text-xs font-black uppercase "+(productSource==="new"?"bg-[#FFC300]":"bg-white")}>Add new product</button></div>
-        {productSource==="existing" && <select required className={inputClass} value={selectedProduct} onChange={e=>{setSelectedProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);setPurchasePrice(p?String(p.purchasePrice*Number(p.units_per_purchase_unit||1)):"");setSubUnit(p?.base_unit||"");setSubUnitQuantity("");}}><option value="">Choose from existing catalogue</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} — {p.purchase_unit||"Piece"} ({p.base_unit||"Piece"} stock), Current stock: {p.quantity}</option>)}</select>}
+        {productSource==="existing" && <select required className={inputClass} value={selectedProduct} onChange={e=>{setSelectedProduct(e.target.value);const p=products.find(x=>x.id===e.target.value);setPurchasePrice("");setPurchaseUnit("");setSubUnit(p?.base_unit||"");setSubUnitQuantity("");}}><option value="">Choose from existing catalogue</option>{products.map(p=><option key={p.id} value={p.id}>{p.name} — {p.purchase_unit||"Piece"} ({p.base_unit||"Piece"} stock), Current stock: {p.quantity}</option>)}</select>}
         {productSource==="new" && <p className="text-xs font-bold bg-zinc-100 p-2">New products are added to the catalogue with zero stock. This purchase invoice adds the purchased quantity.</p>}
         {showProductCreator && <div className="fixed inset-0 z-[100] bg-black/70 flex items-center justify-center p-3"><div className="bg-[#FAF8F5] border-4 border-black shadow-[6px_6px_0_#000] w-full max-w-2xl max-h-[90vh] overflow-y-auto p-5 space-y-4">
           <div className="flex justify-between items-center"><h3 className="text-lg font-black uppercase">Add products to catalogue</h3><button type="button" onClick={()=>setShowProductCreator(false)} className="border-2 border-black bg-white px-3 py-1 font-black">✕</button></div>
