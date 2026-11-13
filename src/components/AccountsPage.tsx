@@ -142,7 +142,7 @@ export default function AccountsPage() {
       const supplier = suppliers.find(s => s.id === selectedSupplier);
       const { error } = await supabase.rpc("create_purchase", { p_purchase: {
         supplier_id: selectedSupplier || null, supplier_name: supplier?.name || "Unspecified supplier",
-        invoice_number: invoiceNumber || null, items: [{ productId: product.id, quantity: qty, purchasePrice: cost }],
+        invoice_number: invoiceNumber || null, request_key: crypto.randomUUID(), items: [{ productId: product.id, quantity: qty, purchasePrice: cost }],
         paid_amount: paid, payment_method: purchaseMethod, notes: null
       }});
       if (error) throw error;
@@ -153,7 +153,7 @@ export default function AccountsPage() {
   const paySupplier = (e: React.FormEvent) => {
     e.preventDefault();
     void run(async () => {
-      const { error } = await supabase.rpc("record_supplier_payment", { p_supplier_id: supplierPayId, p_amount: Number(supplierPayAmount), p_method: paymentMethod, p_notes: null });
+      const { error } = await supabase.rpc("record_supplier_payment", { p_supplier_id: supplierPayId, p_amount: Number(supplierPayAmount), p_method: paymentMethod, p_notes: null, p_request_key: crypto.randomUUID() });
       if (error) throw error;
       setSupplierPayAmount("");
     });
@@ -162,7 +162,7 @@ export default function AccountsPage() {
   const collectCustomer = (e: React.FormEvent) => {
     e.preventDefault();
     void run(async () => {
-      const { error } = await supabase.rpc("record_customer_payment", { p_customer_id: customerPayId, p_amount: Number(customerPayAmount), p_method: paymentMethod, p_notes: null });
+      const { error } = await supabase.rpc("record_customer_payment", { p_customer_id: customerPayId, p_amount: Number(customerPayAmount), p_method: paymentMethod, p_notes: null, p_request_key: crypto.randomUUID() });
       if (error) throw error;
       setCustomerPayAmount("");
     });

@@ -706,8 +706,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!sale.items?.length) throw new Error("A sale must contain at least one item.");
 
     const audit = getAuditFields();
+    const { requestKey, ...saleFields } = sale as typeof sale & { requestKey?: string };
     const salePayload = {
-      ...sale,
+      ...saleFields,
+      request_key: requestKey || crypto.randomUUID(),
       userId: tenantOwnerId,
       timestamp: sale.timestamp || new Date().toISOString(),
       clearanceStatus: sale.paymentMethod === "Cash" ? "Cleared" : (sale.clearanceStatus || "Pending"),

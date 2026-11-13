@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { getShopLocalISOString } from "../lib/dateUtils";
 const getDateInputToday = () => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const timestampForSelectedDate = (date: string) => date+"T12:00:00-07:00";
+const getCurrentMonthPrefix = () => { const now = new Date(); return String(now.getFullYear()) + "-" + String(now.getMonth() + 1).padStart(2, "0"); };
 
 
 import { 
@@ -124,11 +125,12 @@ export default function SalesPage({
   const [newProdQuantity, setNewProdQuantity] = useState("");
   const [newProdBarcode, setNewProdBarcode] = useState("");
 
-  // 1. Monthly sales total as of now (For July 2026)
+  // Current calendar month invoiced sales total.
   const currentMonthSalesTotal = useMemo(() => {
+    const monthPrefix = getCurrentMonthPrefix();
     return sales
-      .filter(s => s.timestamp.includes("2026-07"))
-      .reduce((acc, s) => acc + s.totalAmount, 0);
+      .filter((sale) => sale.timestamp.startsWith(monthPrefix))
+      .reduce((total, sale) => total + Number(sale.totalAmount || 0), 0);
   }, [sales]);
 
   const filteredSales = useMemo(() => {
@@ -349,8 +351,9 @@ export default function SalesPage({
 
   // Finalize Sale process
   const handleFinalize = async () => {
-    if (cart.length === 0) return;
-    if (paymentMethod === "Store Credit" && !matchedCustomer) { alert("Select an existing saved customer before recording a credit sale."); return; }
+    if (isFinalizing || cart.length === 0) return;
+    setIsFinalizing(true);
+    if (paymentMethod === "Store Credit" && !matchedCustomer) { alert("Select an existing saved customer before recording a credit sale."); setIsFinalizing(false); return; }
 
     // Check if new customer and we should onboard them to loyalty points
     let finalCustName = customerName || "General Customer";
@@ -388,7 +391,8 @@ export default function SalesPage({
     }));
 
     const saleRecord: Sale = {
-      id: "TX-" + (1000 + sales.length + 1),
+      id: "TX-" + crypto.randomUUID().slice(0, 8).toUpperCase(),
+      requestKey: crypto.randomUUID(),
       customerName: finalCustName,
       customerPhone: finalCustPhone,
       customerId: matchedCustomer?.id || null,
@@ -418,7 +422,9 @@ export default function SalesPage({
       setShowCommissionPrompt(true);
     } else {
       // Direct to receipt options
-      try { await onAddSale(saleRecord); setShowInvoiceDownloadOptions(true); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); }
+      try { await onAddSale(saleRecord); setShowInvoiceDownloadOptions(true); }
+      catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); }
+      finally { setIsFinalizing(false); }
     }
   };
 
@@ -432,8 +438,10 @@ export default function SalesPage({
       await onAddSale(finalizedSale);
     } catch (error: any) {
       alert(error?.message || "Sale could not be saved. No stock was deducted.");
+      setIsFinalizing(false);
       return;
     }
+    setIsFinalizing(false);
 
     if (generate && finalizedSale.commissionAgent) {
       try {
@@ -995,7 +1003,7 @@ export default function SalesPage({
               <div>
                 <span className="text-[10px] uppercase font-mono font-black text-zinc-600">Total Invoices</span>
                 <h4 className="text-2xl font-black text-black font-mono mt-1">
-                  {sales.filter(s => s.timestamp.includes("2026-07")).length} Bills
+                  {sales.filter(s => s.timestamp.startsWith(getCurrentMonthPrefix())).length} Bills
                 </h4>
                 <p className="text-[9px] text-zinc-600 font-bold font-mono mt-1">STABLE CLIENT METRICS</p>
               </div>
@@ -1667,12 +1675,12 @@ export default function SalesPage({
           </div>
 
           <button
-            onClick={() => handleFinalize()}
-            disabled={cart.length === 0}
+            onClick={() => void handleFinalize()}
+            disabled={isFinalizing || cart.length === 0}
             className="w-full py-3 bg-[#D63031] hover:bg-[#E54849] text-white disabled:bg-zinc-100 disabled:border-zinc-300 disabled:text-zinc-400 rounded-none border-2 border-black font-black transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-2 cursor-pointer"
           >
             <Check className="w-5 h-5" />
-            <span>FINALIZE BILL INVOICE</span>
+            <span>{isFinalizing ? "SAVING INVOICE…" : "FINALIZE BILL INVOICE"}</span>
           </button>
         </div>
 
