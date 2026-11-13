@@ -214,7 +214,11 @@ export default function AccountsPage() {
     // A changed purchase cost gets its own catalogue identity. The original
     // product remains untouched; the new identity is only created by the
     // final purchase RPC, together with its stock intake.
-    const createCostVariant = Math.abs(unitCost - Number(product.purchasePrice || 0)) > 0.000001;
+    const createCostVariant =
+      Math.abs(unitCost - Number(product.purchasePrice || 0)) > 0.000001 ||
+      (product.purchase_unit || "Piece") !== purchaseUnit ||
+      (product.base_unit || "Piece") !== subUnit ||
+      Number(product.units_per_purchase_unit || 1) !== factor;
     const lineId = createCostVariant ? "draft:" + crypto.randomUUID() : product.id;
     const newProduct = createCostVariant ? {
       name: product.name,
