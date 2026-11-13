@@ -124,11 +124,13 @@ export default function SalesPage({
   const [newProdQuantity, setNewProdQuantity] = useState("");
   const [newProdBarcode, setNewProdBarcode] = useState("");
 
-  // 1. Monthly sales total as of now (For July 2026)
+  // Current calendar month invoiced sales total.
   const currentMonthSalesTotal = useMemo(() => {
+    const now = new Date();
+    const monthPrefix = String(now.getFullYear()) + "-" + String(now.getMonth() + 1).padStart(2, "0");
     return sales
-      .filter(s => s.timestamp.includes("2026-07"))
-      .reduce((acc, s) => acc + s.totalAmount, 0);
+      .filter((sale) => sale.timestamp.startsWith(monthPrefix))
+      .reduce((total, sale) => total + Number(sale.totalAmount || 0), 0);
   }, [sales]);
 
   const filteredSales = useMemo(() => {
@@ -351,7 +353,7 @@ export default function SalesPage({
   const handleFinalize = async () => {
     if (isFinalizing || cart.length === 0) return;
     setIsFinalizing(true);
-    if (paymentMethod === "Store Credit" && !matchedCustomer) { alert("Select an existing saved customer before recording a credit sale."); return; }
+    if (paymentMethod === "Store Credit" && !matchedCustomer) { alert("Select an existing saved customer before recording a credit sale."); setIsFinalizing(false); return; }
 
     // Check if new customer and we should onboard them to loyalty points
     let finalCustName = customerName || "General Customer";
@@ -389,7 +391,7 @@ export default function SalesPage({
     }));
 
     const saleRecord: Sale = {
-      id: "TX-" + (1000 + sales.length + 1),
+      id: "TX-" + crypto.randomUUID().slice(0, 8).toUpperCase(),
       requestKey: crypto.randomUUID(),
       customerName: finalCustName,
       customerPhone: finalCustPhone,
