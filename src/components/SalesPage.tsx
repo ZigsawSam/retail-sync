@@ -349,7 +349,8 @@ export default function SalesPage({
 
   // Finalize Sale process
   const handleFinalize = async () => {
-    if (cart.length === 0) return;
+    if (isFinalizing || cart.length === 0) return;
+    setIsFinalizing(true);
     if (paymentMethod === "Store Credit" && !matchedCustomer) { alert("Select an existing saved customer before recording a credit sale."); return; }
 
     // Check if new customer and we should onboard them to loyalty points
@@ -389,6 +390,7 @@ export default function SalesPage({
 
     const saleRecord: Sale = {
       id: "TX-" + (1000 + sales.length + 1),
+      requestKey: crypto.randomUUID(),
       customerName: finalCustName,
       customerPhone: finalCustPhone,
       customerId: matchedCustomer?.id || null,
@@ -418,7 +420,9 @@ export default function SalesPage({
       setShowCommissionPrompt(true);
     } else {
       // Direct to receipt options
-      try { await onAddSale(saleRecord); setShowInvoiceDownloadOptions(true); } catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); }
+      try { await onAddSale(saleRecord); setShowInvoiceDownloadOptions(true); }
+      catch (error: any) { alert(error?.message || "Sale could not be saved. No stock was deducted."); }
+      finally { setIsFinalizing(false); }
     }
   };
 
@@ -432,8 +436,10 @@ export default function SalesPage({
       await onAddSale(finalizedSale);
     } catch (error: any) {
       alert(error?.message || "Sale could not be saved. No stock was deducted.");
+      setIsFinalizing(false);
       return;
     }
+    setIsFinalizing(false);
 
     if (generate && finalizedSale.commissionAgent) {
       try {
@@ -1667,12 +1673,13 @@ export default function SalesPage({
           </div>
 
           <button
-            onClick={() => handleFinalize()}
+            onClick={() => void handleFinalize()}
+            disabled={isFinalizing}
             disabled={cart.length === 0}
             className="w-full py-3 bg-[#D63031] hover:bg-[#E54849] text-white disabled:bg-zinc-100 disabled:border-zinc-300 disabled:text-zinc-400 rounded-none border-2 border-black font-black transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-2 cursor-pointer"
           >
             <Check className="w-5 h-5" />
-            <span>FINALIZE BILL INVOICE</span>
+            <span>{isFinalizing ? "SAVING INVOICE…" : "FINALIZE BILL INVOICE"}</span>
           </button>
         </div>
 
