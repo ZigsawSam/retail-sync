@@ -65,6 +65,7 @@ export interface SaleItem {
 
 export interface Sale {
   id: string;
+  requestKey?: string;
   customerName: string;
   customerPhone: string;
   customerId?: string | null;
