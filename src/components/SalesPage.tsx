@@ -1676,8 +1676,7 @@ export default function SalesPage({
 
           <button
             onClick={() => void handleFinalize()}
-            disabled={isFinalizing}
-            disabled={cart.length === 0}
+            disabled={isFinalizing || cart.length === 0}
             className="w-full py-3 bg-[#D63031] hover:bg-[#E54849] text-white disabled:bg-zinc-100 disabled:border-zinc-300 disabled:text-zinc-400 rounded-none border-2 border-black font-black transition-all shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] flex items-center justify-center gap-2 cursor-pointer"
           >
             <Check className="w-5 h-5" />
