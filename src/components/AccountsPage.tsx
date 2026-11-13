@@ -207,16 +207,49 @@ export default function AccountsPage() {
   const addLineToPurchase = () => {
     const product = products.find(p => p.id === selectedProduct);
     const qty = Number(quantity); const cost = Number(purchasePrice || 0); const factor = Number(subUnitQuantity);
-    if (productSource !== "existing" || !product || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(factor) || factor <= 0 || !Number.isFinite(cost) || cost < 0 || !purchaseUnit || !subUnit || (product.base_unit && product.base_unit !== subUnit)) {
-      setMessage("Select a product and enter a valid quantity and purchase rate."); return;
+    if (productSource !== "existing" || !product || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(factor) || factor <= 0 || !Number.isFinite(cost) || cost < 0 || !purchaseUnit || !subUnit) {
+      setMessage("Select a product and enter a valid quantity, unit conversion and purchase rate."); return;
     }
+    const unitCost = cost / factor;
+    // A changed purchase cost gets its own catalogue identity. The original
+    // product remains untouched; the new identity is only created by the
+    // final purchase RPC, together with its stock intake.
+    const createCostVariant = Math.abs(unitCost - Number(product.purchasePrice || 0)) > 0.000001;
+    const lineId = createCostVariant ? "draft:" + crypto.randomUUID() : product.id;
+    const newProduct = createCostVariant ? {
+      name: product.name,
+      category: product.category || "Other",
+      barcode: "",
+      sellingPrice: Number(product.sellingPrice),
+      purchaseUnit,
+      baseUnit: subUnit,
+      unitsPerPurchaseUnit: factor
+    } : undefined;
     setPurchaseLines(old => {
-      const existing = old.find(line => line.productId === product.id);
+      const existing = old.find(line => line.productId === lineId);
+      const line = {
+        productId: lineId,
+        name: product.name,
+        quantity: qty * factor,
+        purchasePrice: unitCost,
+        purchaseQuantity: qty,
+        purchaseUnit,
+        baseUnit: subUnit,
+        unitsPerPurchaseUnit: factor,
+        purchaseUnitCost: cost,
+        ...(newProduct ? { newProduct } : {})
+      };
       return existing
-        ? old.map(line => line.productId === product.id ? { ...line, quantity: line.quantity + qty*factor, purchasePrice: cost/factor, purchaseQuantity: (line.purchaseQuantity || 0) + qty, purchaseUnit, baseUnit: product.base_unit || subUnit, unitsPerPurchaseUnit: factor, purchaseUnitCost: cost } : line)
-        : [...old, { productId: product.id, name: product.name, quantity: qty*factor, purchasePrice: cost/factor, purchaseQuantity: qty, purchaseUnit, baseUnit: product.base_unit || subUnit, unitsPerPurchaseUnit: factor, purchaseUnitCost: cost }];
+        ? old.map(item => item.productId === lineId
+            ? { ...item, quantity: item.quantity + line.quantity,
+                purchaseQuantity: (item.purchaseQuantity || 0) + qty,
+                purchaseUnit, baseUnit: subUnit, unitsPerPurchaseUnit: factor,
+                purchaseUnitCost: cost, purchasePrice: unitCost }
+            : item)
+        : [...old, line];
     });
-    setSelectedProduct(""); setQuantity(""); setSubUnitQuantity(""); setPurchasePrice(""); setProductSource("existing"); setMessage("");
+    setSelectedProduct(""); setQuantity(""); setSubUnitQuantity(""); setPurchasePrice("");
+    setPurchaseUnit(""); setSubUnit(""); setProductSource("existing"); setMessage("");
   };
 
   const removePurchaseLine = (productId: string) => setPurchaseLines(old => old.filter(line => line.productId !== productId));
