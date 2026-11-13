@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from "react";
 import { getShopLocalISOString } from "../lib/dateUtils";
 const getDateInputToday = () => { const d = new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
 const timestampForSelectedDate = (date: string) => date+"T12:00:00-07:00";
+const getCurrentMonthPrefix = () => { const now = new Date(); return String(now.getFullYear()) + "-" + String(now.getMonth() + 1).padStart(2, "0"); };
 
 
 import { 
@@ -126,8 +127,7 @@ export default function SalesPage({
 
   // Current calendar month invoiced sales total.
   const currentMonthSalesTotal = useMemo(() => {
-    const now = new Date();
-    const monthPrefix = String(now.getFullYear()) + "-" + String(now.getMonth() + 1).padStart(2, "0");
+    const monthPrefix = getCurrentMonthPrefix();
     return sales
       .filter((sale) => sale.timestamp.startsWith(monthPrefix))
       .reduce((total, sale) => total + Number(sale.totalAmount || 0), 0);
@@ -1003,7 +1003,7 @@ export default function SalesPage({
               <div>
                 <span className="text-[10px] uppercase font-mono font-black text-zinc-600">Total Invoices</span>
                 <h4 className="text-2xl font-black text-black font-mono mt-1">
-                  {sales.filter(s => s.timestamp.includes("2026-07")).length} Bills
+                  {sales.filter(s => s.timestamp.startsWith(getCurrentMonthPrefix())).length} Bills
                 </h4>
                 <p className="text-[9px] text-zinc-600 font-bold font-mono mt-1">STABLE CLIENT METRICS</p>
               </div>
