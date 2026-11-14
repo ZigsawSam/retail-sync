@@ -203,6 +203,7 @@ DECLARE
   v_total_debit numeric := 0;
   v_total_credit numeric := 0;
   v_line_count integer := 0;
+  v_existing_source_id uuid;
 BEGIN
   IF v_owner IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.accounting_settings WHERE owner_id = v_owner) THEN
@@ -217,14 +218,41 @@ BEGIN
   IF p_effective_at::date < (SELECT books_start_date FROM public.accounting_settings WHERE owner_id = v_owner) THEN
     RAISE EXCEPTION 'Journal entry date is before the accounting start date';
   END IF;
-  IF jsonb_typeof(p_lines) <> 'array' OR jsonb_array_length(p_lines) < 2 THEN
+  IF jsonb_typeof(p_lines) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Journal lines must be supplied as an array';
+  END IF;
+  IF jsonb_array_length(p_lines) < 2 THEN
     RAISE EXCEPTION 'A journal entry requires at least two lines';
   END IF;
 
-  PERFORM pg_advisory_xact_lock(hashtextextended(v_owner::text || ':journal:' || p_idempotency_key, 0));
-  SELECT id INTO v_existing_id FROM public.journal_entries
+  -- Lock both identities so retries cannot create duplicate entries through
+  -- either the idempotency key or the source-document uniqueness constraint.
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    v_owner::text || ':journal-key:' || p_idempotency_key, 0
+  ));
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    v_owner::text || ':journal-source:' || p_source_type || ':' || p_source_id, 0
+  ));
+
+  SELECT id, source_type, source_id
+    INTO v_existing_id, p_source_type, p_source_id
+    FROM public.journal_entries
    WHERE owner_id = v_owner AND idempotency_key = p_idempotency_key;
-  IF v_existing_id IS NOT NULL THEN RETURN v_existing_id; END IF;
+  IF v_existing_id IS NOT NULL THEN
+    -- A key must never be reused for a different source document.
+    IF p_source_type IS DISTINCT FROM (SELECT source_type FROM public.journal_entries WHERE id = v_existing_id)
+       OR p_source_id IS DISTINCT FROM (SELECT source_id FROM public.journal_entries WHERE id = v_existing_id) THEN
+      RAISE EXCEPTION 'Idempotency key is already used by a different source document';
+    END IF;
+    RETURN v_existing_id;
+  END IF;
+
+  SELECT id INTO v_existing_source_id
+    FROM public.journal_entries
+   WHERE owner_id = v_owner AND source_type = p_source_type AND source_id = p_source_id;
+  IF v_existing_source_id IS NOT NULL THEN
+    RETURN v_existing_source_id;
+  END IF;
 
   FOR v_line IN SELECT value FROM jsonb_array_elements(p_lines) LOOP
     v_account_id := NULLIF(v_line->>'account_id','')::uuid;
