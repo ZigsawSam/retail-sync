@@ -137,6 +137,16 @@ export default function OpeningBalancesPage() {
     setMessage("Opening balances saved and validated. Review the reconciliation totals before posting.");
   });
 
+  const discardDraft = () => run(async () => {
+    if (!batch?.id || batch.status === "posted") throw new Error("Only an unposted draft can be discarded.");
+    if (!window.confirm("Discard this unposted opening-balance draft? You can then correct the figures and create a new draft.")) return;
+    const { error } = await supabase.rpc("discard_accounting_opening_balance_draft", { p_batch_id: batch.id });
+    if (error) throw error;
+    setBatch(null); setValidation(null); setApproveEquity(false);
+    setMessage("Unposted draft discarded. You can now correct the opening balances.");
+    await load();
+  });
+
   const post = () => run(async () => {
     if (!batch?.id || batch.status !== "validated") throw new Error("Only a validated opening balance batch can be posted.");
     if (!window.confirm("Post the 31 August 2026 opening balances to the immutable accounting journal? This cannot be edited; corrections require reversal entries.")) return;
@@ -183,7 +193,8 @@ export default function OpeningBalancesPage() {
               <p className="text-sm">Status: <strong className="uppercase">{batch.status}</strong></p>
               {validation && <pre className="overflow-auto bg-zinc-100 p-3 text-xs">{JSON.stringify(validation, null, 2)}</pre>}
               {batch.status === "validated" && <button disabled={busy} onClick={post} className={BUTTON + " bg-[#FFC300]"}>{busy ? "Posting…" : "Post opening journal"}</button>}
-              <p className="text-xs text-zinc-500">A saved draft cannot be edited in this build. If validation failed, contact support before creating another batch.</p>
+              {batch.status !== "posted" && <button disabled={busy} onClick={discardDraft} className={BUTTON + " bg-white"}>Discard unposted draft and correct</button>}
+              <p className="text-xs text-zinc-500">A saved draft cannot be edited in place. You can safely discard an unposted draft and enter corrected figures. Posted journals cannot be deleted.</p>
             </section>
           ) : (
             <>
