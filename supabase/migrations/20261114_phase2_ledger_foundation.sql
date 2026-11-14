@@ -313,7 +313,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.initialize_accounting(text,date) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.initialize_accounting(text,date) FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.post_journal_entry(timestamptz,text,text,text,text,jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.initialize_accounting(text,date) TO authenticated;
 -- Journal posting is intentionally not exposed to clients. Trusted transaction
