@@ -134,7 +134,7 @@ CREATE TRIGGER journal_entries_immutable_trg
 
 DROP TRIGGER IF EXISTS journal_lines_immutable_trg ON public.journal_lines;
 CREATE TRIGGER journal_lines_immutable_trg
-  BEFORE UPDATE OR DELETE ON public.journal_lines
+  BEFORE INSERT OR UPDATE OR DELETE ON public.journal_lines
   FOR EACH ROW EXECUTE FUNCTION public.prevent_posted_journal_mutation();
 
 CREATE OR REPLACE FUNCTION public.initialize_accounting(
