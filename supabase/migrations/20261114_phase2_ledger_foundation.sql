@@ -302,6 +302,9 @@ BEGIN
     );
   END LOOP;
 
+  -- Close the narrow line-insert window before returning to the caller.
+  PERFORM set_config('retail_sync.posting_journal', 'off', true);
+
   RETURN v_entry_id;
 END;
 $$;
