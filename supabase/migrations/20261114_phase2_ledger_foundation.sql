@@ -204,6 +204,8 @@ DECLARE
   v_total_credit numeric := 0;
   v_line_count integer := 0;
   v_existing_source_id uuid;
+  v_existing_source_type text;
+  v_existing_source_key text;
 BEGIN
   IF v_owner IS NULL THEN RAISE EXCEPTION 'Not authenticated'; END IF;
   IF NOT EXISTS (SELECT 1 FROM public.accounting_settings WHERE owner_id = v_owner) THEN
@@ -235,13 +237,13 @@ BEGIN
   ));
 
   SELECT id, source_type, source_id
-    INTO v_existing_id, p_source_type, p_source_id
+    INTO v_existing_id, v_existing_source_type, v_existing_source_key
     FROM public.journal_entries
    WHERE owner_id = v_owner AND idempotency_key = p_idempotency_key;
   IF v_existing_id IS NOT NULL THEN
     -- A key must never be reused for a different source document.
-    IF p_source_type IS DISTINCT FROM (SELECT source_type FROM public.journal_entries WHERE id = v_existing_id)
-       OR p_source_id IS DISTINCT FROM (SELECT source_id FROM public.journal_entries WHERE id = v_existing_id) THEN
+    IF v_existing_source_type IS DISTINCT FROM p_source_type
+       OR v_existing_source_key IS DISTINCT FROM p_source_id THEN
       RAISE EXCEPTION 'Idempotency key is already used by a different source document';
     END IF;
     RETURN v_existing_id;
@@ -298,9 +300,10 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.initialize_accounting(text,date) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.post_journal_entry(timestamptz,text,text,text,text,jsonb) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.post_journal_entry(timestamptz,text,text,text,text,jsonb) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.initialize_accounting(text,date) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.post_journal_entry(timestamptz,text,text,text,text,jsonb) TO authenticated;
+-- Journal posting is intentionally not exposed to clients. Trusted transaction
+-- RPCs owned by the database may invoke it inside their own transaction.
 
 NOTIFY pgrst, 'reload schema';
 COMMIT;
