@@ -103,9 +103,8 @@ CREATE POLICY journal_lines_owner_read ON public.journal_lines
 CREATE OR REPLACE FUNCTION public.prevent_posted_journal_mutation()
 RETURNS trigger
 LANGUAGE plpgsql
+SET search_path = pg_catalog, public
 AS $$
-DECLARE
-  v_entry_status text;
 BEGIN
   IF TG_TABLE_NAME = 'journal_entries' THEN
     IF TG_OP IN ('UPDATE','DELETE') THEN
@@ -113,21 +112,16 @@ BEGIN
     END IF;
   ELSIF TG_TABLE_NAME = 'journal_lines' THEN
     IF TG_OP IN ('UPDATE','DELETE') THEN
-      SELECT status INTO v_entry_status
-      FROM public.journal_entries
-      WHERE owner_id = OLD.owner_id AND id = OLD.journal_entry_id;
-      IF v_entry_status = 'posted' THEN
-        RAISE EXCEPTION 'Posted journal lines are immutable; create a reversal instead';
-      END IF;
-      RAISE EXCEPTION 'Journal lines cannot be modified or deleted';
+      RAISE EXCEPTION 'Posted journal lines are immutable; create a reversal instead';
     END IF;
-  END IF;
-  IF TG_OP = 'DELETE' THEN
-    RETURN OLD;
+    -- Only the trusted posting RPC may insert lines during its transaction.
+    IF current_setting('retail_sync.posting_journal', true) IS DISTINCT FROM 'on' THEN
+      RAISE EXCEPTION 'Journal lines can only be inserted by the journal posting function';
+    END IF;
   END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS journal_entries_immutable_trg ON public.journal_entries;
 CREATE TRIGGER journal_entries_immutable_trg
@@ -200,8 +194,8 @@ CREATE OR REPLACE FUNCTION public.post_journal_entry(
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
-AS $$
+SET search_path = pg_catalog, public
+AS $
 DECLARE
   v_owner uuid := auth.uid();
   v_entry_id uuid;
@@ -285,6 +279,9 @@ BEGIN
   IF v_line_count < 2 OR round(v_total_debit, 4) <> round(v_total_credit, 4) THEN
     RAISE EXCEPTION 'Journal entry is not balanced';
   END IF;
+
+  -- Permit journal-line inserts only inside this trusted posting transaction.
+  PERFORM set_config('retail_sync.posting_journal', 'on', true);
 
   INSERT INTO public.journal_entries(
     owner_id, effective_at, description, source_type, source_id, idempotency_key, created_by
