@@ -12,6 +12,7 @@ export const ROUTE_ROLES: Record<string, ERPRole[]> = {
   "agent-commissions": ["admin"],
   expenses: ["admin", "cashier"],
   transactions: ["admin"],
+  accounting: ["admin"],
   insights: ["admin", "cashier"],
   ai: ["admin"],
   settings: ["admin"],
