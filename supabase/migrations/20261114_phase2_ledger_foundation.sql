@@ -145,7 +145,7 @@ RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_owner uuid := auth.uid();
 BEGIN
@@ -199,7 +199,7 @@ RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = pg_catalog, public
-AS $
+AS $$
 DECLARE
   v_owner uuid := auth.uid();
   v_entry_id uuid;
