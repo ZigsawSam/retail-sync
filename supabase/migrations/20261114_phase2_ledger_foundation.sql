@@ -112,9 +112,12 @@ BEGIN
       RAISE EXCEPTION 'Journal lines cannot be modified or deleted';
     END IF;
   END IF;
-  RETURN COALESCE(NEW, OLD);
+  IF TG_OP = 'DELETE' THEN
+    RETURN OLD;
+  END IF;
+  RETURN NEW;
 END;
-$$;
+$;
 
 DROP TRIGGER IF EXISTS journal_entries_immutable_trg ON public.journal_entries;
 CREATE TRIGGER journal_entries_immutable_trg
