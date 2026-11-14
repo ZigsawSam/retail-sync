@@ -433,7 +433,7 @@ BEGIN
   END IF;
 
   IF NOT has_table_privilege('authenticated', 'public.accounts', 'SELECT')
-     OR has_function_privilege('authenticated', 'public.initialize_accounting(text,date)', 'EXECUTE')
+     OR NOT has_function_privilege('authenticated', 'public.initialize_accounting(text,date)', 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.post_journal_entry(timestamptz,text,text,text,text,jsonb)', 'EXECUTE') THEN
     RAISE EXCEPTION 'Unexpected authenticated grants on ledger functions or tables';
   END IF;
