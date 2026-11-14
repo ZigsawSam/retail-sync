@@ -110,6 +110,10 @@ BEGIN
     IF TG_OP IN ('UPDATE','DELETE') THEN
       RAISE EXCEPTION 'Journal entries are immutable; create a reversal instead';
     END IF;
+    IF TG_OP = 'INSERT'
+       AND current_setting('retail_sync.posting_journal', true) IS DISTINCT FROM 'on' THEN
+      RAISE EXCEPTION 'Journal entries can only be inserted by the journal posting function';
+    END IF;
   ELSIF TG_TABLE_NAME = 'journal_lines' THEN
     IF TG_OP IN ('UPDATE','DELETE') THEN
       RAISE EXCEPTION 'Posted journal lines are immutable; create a reversal instead';
@@ -125,7 +129,7 @@ $$;
 
 DROP TRIGGER IF EXISTS journal_entries_immutable_trg ON public.journal_entries;
 CREATE TRIGGER journal_entries_immutable_trg
-  BEFORE UPDATE OR DELETE ON public.journal_entries
+  BEFORE INSERT OR UPDATE OR DELETE ON public.journal_entries
   FOR EACH ROW EXECUTE FUNCTION public.prevent_posted_journal_mutation();
 
 DROP TRIGGER IF EXISTS journal_lines_immutable_trg ON public.journal_lines;
