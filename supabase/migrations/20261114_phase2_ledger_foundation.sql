@@ -74,6 +74,16 @@ ALTER TABLE public.accounting_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.journal_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.journal_lines ENABLE ROW LEVEL SECURITY;
 
+-- Supabase default privileges in this project grant broad rights on new tables.
+-- Revoke client writes explicitly; authenticated users receive read-only access
+-- constrained by the owner-scoped RLS policies above.
+REVOKE ALL ON TABLE public.accounts, public.accounting_settings,
+  public.journal_entries, public.journal_lines FROM PUBLIC, anon, authenticated;
+GRANT SELECT ON TABLE public.accounts, public.accounting_settings,
+  public.journal_entries, public.journal_lines TO authenticated;
+REVOKE ALL ON SEQUENCE public.journal_entries_entry_number_seq
+  FROM PUBLIC, anon, authenticated;
+
 DROP POLICY IF EXISTS accounting_accounts_owner_read ON public.accounts;
 CREATE POLICY accounting_accounts_owner_read ON public.accounts
   FOR SELECT TO authenticated USING (owner_id = auth.uid());
@@ -136,8 +146,8 @@ CREATE OR REPLACE FUNCTION public.initialize_accounting(
 RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
-AS $$
+SET search_path = pg_catalog, public
+AS $
 DECLARE
   v_owner uuid := auth.uid();
 BEGIN
