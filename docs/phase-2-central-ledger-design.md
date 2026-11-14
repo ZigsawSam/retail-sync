@@ -4,6 +4,8 @@
 
 Make an immutable, owner-scoped double-entry journal the source of truth for cash, bank, receivables, payables, inventory and equity. Existing operational tables remain the invoice and workflow records; they are not themselves the general ledger.
 
+**Confirmed base currency:** INR (Indian Rupee; ISO 4217 code `INR`). The owner initialization step must use `INR`.
+
 ## Guardrails
 
 - No production migration or deployment from this branch until the production schema has been inspected and the migration has been reviewed against it.
